@@ -40,4 +40,5 @@ Old version
 -----------
 
 0.1: https://code.google.com/p/ktexteditor-mcursors/source/browse/#svn%2Ftrunk%2Ftag-0.1%253Fstate%253Dclosed
+
 0.2: https://code.google.com/p/ktexteditor-mcursors/source/browse/#svn%2Ftrunk%2Ftag-0.2%253Fstate%253Dclosed
