@@ -1,0 +1,25 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=KTextEditor/Plugin
+Name=MultiCursor
+Name[x-test]=xxMultiCursorxx
+Comment=Management of multi-cursor
+GenericName=MultiCursor
+GenericName[x-test]=xxMultiCursorxx
+Icon=kate
+Encoding=UTF-8
+X-KDE-ServiceTypes=KTextEditor/Plugin
+X-KDE-Library=ktexteditor_multicursor
+X-KDE-PluginKeyword=ktexteditor_multicursor
+X-KDE-PluginInfo-Name=ktexteditor_multicursor
+X-KDE-PluginInfo-Author=Jonathan Poelen
+X-KDE-PluginInfo-Email=jonathan.poelen@gmail.com
+X-KDE-PluginInfo-Website=https://code.google.com/p/ktexteditor-mcursors/
+X-KDE-PluginInfo-Category=Editor
+X-KDE-PluginInfo-Version=0.2
+X-KDE-PluginInfo-License=GPL
+X-KDE-PluginInfo-Depends=
+X-KDE-PluginInfo-EnabledByDefault=false
+X-KDE-ParentApp=kate
+X-KDE-Version=4.0
+X-Ubuntu-Gettext-Domain=desktop_kdesdk

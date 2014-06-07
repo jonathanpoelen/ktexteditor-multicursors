@@ -1,0 +1,19 @@
+<!DOCTYPE kpartgui>
+<kpartplugin name="ktexteditor_multicursor" library="ktexteditor_multicursor" version="2">
+<MenuBar>
+	<Menu name="tools"><Text>&amp;Tools</Text>
+		<separator group="tools_multicursor" />
+		<Action name="set_multicursor" group="tools_multicursor"/>
+		<Menu name="multicursor"><text>&amp;MultiCursor</text>
+			<Action name="backspace_multicursor" group="multicursor_multicursor"/>
+			<Action name="remove_all_multicursor" group="multicursor_multicursor"/>
+			<Action name="remove_line_multicursor" group="multicursor_multicursor"/>
+			<Action name="move_next_multicursor" group="multicursor_multicursor"/>
+			<Action name="move_prev_multicursor" group="multicursor_multicursor"/>
+			<Action name="swap_multicursor" group="multicursor_multicursor"/>
+			<Action name="active_multicursor" group="multicursor_multicursor"/>
+			<Action name="synchronise_multicursor" group="multicursor_multicursor"/>
+		</Menu>
+	</Menu>
+</MenuBar>
+</kpartplugin>

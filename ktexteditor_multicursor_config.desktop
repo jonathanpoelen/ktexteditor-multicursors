@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Service
+X-KDE-ServiceTypes=KCModule
+X-KDE-Library=ktexteditor_multicursor
+X-KDE-PluginKeyword=ktexteditor_multicursor_config
+X-KDE-FactoryName=ktexteditor_multicursor_config
+X-KDE-ParentComponents=ktexteditor_multicursor
+Name=Configuration management of multi-cursor
