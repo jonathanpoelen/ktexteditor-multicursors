@@ -25,8 +25,10 @@
 #include <KColorButton>
 #include <KComboBox>
 #include <KLineEdit>
+#include <KLineEdit>
 #include <QtGui/QTextCharFormat>
 #include <QtGui/QBoxLayout>
+#include <QtGui/QCheckBox>
 #include <QtGui/QLabel>
 #include <QtGui/QFrame>
 
@@ -62,6 +64,13 @@ MultiCursorConfig::MultiCursorConfig(QWidget *parent, const QVariantList &args)
 	hlayout->addWidget(m_underline_color);
 	layout->addLayout(hlayout);
 
+	hlayout = new QHBoxLayout(this);
+	m_active_ctrl_click = new QCheckBox(this);
+	QLabel * lactive_ctrl_click = new QLabel(i18n("Set cursor with Ctrl+Click"));
+	hlayout->addWidget(lactive_ctrl_click);
+	hlayout->addWidget(m_active_ctrl_click);
+	layout->addLayout(hlayout);
+
 	setLayout(layout);
 
 	load();
@@ -71,6 +80,8 @@ MultiCursorConfig::MultiCursorConfig(QWidget *parent, const QVariantList &args)
 	QObject::connect(m_underline_color, SIGNAL(changed(QColor)),
 									 this, SLOT(slotChanged()));
 	QObject::connect(m_underline_style, SIGNAL(currentIndexChanged(int)),
+									 this, SLOT(slotChanged()));
+	QObject::connect(m_active_ctrl_click, SIGNAL(stateChanged(int)),
 									 this, SLOT(slotChanged()));
 
 	QObject::connect(m_underline_style, SIGNAL(currentIndexChanged(int)),
@@ -92,11 +103,13 @@ void MultiCursorConfig::save()
 {
 	if (MultiCursorPlugin::self())
 	{
-		MultiCursorPlugin::self()->setCursorBrush(m_cursor_color->color());
+		MultiCursorPlugin * self = MultiCursorPlugin::self();
+		self->setCursorBrush(m_cursor_color->color());
 		int index = m_underline_style->currentIndex();
-		MultiCursorPlugin::self()->setUnderlineStyle(QTextCharFormat::UnderlineStyle(index));
-		MultiCursorPlugin::self()->setUnderlineColor(m_underline_color->color());
-		MultiCursorPlugin::self()->writeConfig();
+		self->setUnderlineStyle(QTextCharFormat::UnderlineStyle(index));
+		self->setUnderlineColor(m_underline_color->color());
+		self->setActiveCtrlClick(m_active_ctrl_click->isEnabled());
+		self->writeConfig();
 	}
 	else
 	{
@@ -104,6 +117,7 @@ void MultiCursorConfig::save()
 		cg.writeEntry("cursor_color", m_cursor_color->color());
 		cg.writeEntry("underline_style", m_underline_style->currentIndex());
 		cg.writeEntry("underline_color", m_underline_color->text());
+		cg.writeEntry("active_ctrl_click", m_active_ctrl_click->isChecked());
 	}
 	emit changed(false);
 }
@@ -112,10 +126,12 @@ void MultiCursorConfig::load()
 {
 	if (MultiCursorPlugin::self())
 	{
-		MultiCursorPlugin::self()->readConfig();
-		m_cursor_color->setColor(MultiCursorPlugin::self()->cursorBrush().color());
-		m_underline_color->setColor(MultiCursorPlugin::self()->underlineColor());
-		m_underline_style->setCurrentIndex(MultiCursorPlugin::self()->underlineStyle());
+		MultiCursorPlugin * self = MultiCursorPlugin::self();
+		self->readConfig();
+		m_cursor_color->setColor(self->cursorBrush().color());
+		m_underline_color->setColor(self->underlineColor());
+		m_underline_style->setCurrentIndex(self->underlineStyle());
+		m_active_ctrl_click->setChecked(self->activeCtrlClick());
 	}
 	else
 	{
@@ -124,6 +140,7 @@ void MultiCursorConfig::load()
 		m_cursor_color->setColor(cg.readEntry("cursor_color", values.cursorColor));
 		m_underline_color->setColor(cg.readEntry("underline_color", values.underlineColor));
 		m_underline_style->setCurrentIndex(cg.readEntry("underline_style", values.underlineStyle));
+		m_active_ctrl_click->setChecked(cg.readEntry("active_ctrl_click" , false));
 	}
 	emit changed(false);
 }
@@ -134,6 +151,8 @@ void MultiCursorConfig::defaults()
 	m_cursor_color->setColor(values.cursorColor);
 	m_underline_style->setCurrentIndex(values.underlineStyle);
 	m_underline_color->setColor(values.underlineColor);
+	m_active_ctrl_click->setCheckable(true);
+	m_active_ctrl_click->setChecked(false);
 	emit changed(true);
 }
 

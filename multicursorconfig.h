@@ -22,6 +22,7 @@
 
 class KColorButton;
 class KComboBox;
+class QCheckBox;
 
 class MultiCursorConfig
 : public KCModule
@@ -43,6 +44,7 @@ private:
 	KColorButton * m_cursor_color;
 	KComboBox * m_underline_style;
 	KColorButton * m_underline_color;
+	QCheckBox * m_active_ctrl_click;
 };
 
 #endif // MCURSORS_CONFIG_H

@@ -33,6 +33,7 @@
 #include <KActionMenu>
 
 #include <QMenu>
+#include <QApplication>
 #include <KConfigGroup>
 
 MultiCursorPlugin *MultiCursorPlugin::plugin = 0;
@@ -47,6 +48,8 @@ MultiCursorPlugin::MultiCursorPlugin(QObject *parent, const QVariantList &args)
 : KTextEditor::Plugin(parent)
 , m_views()
 , m_attr(new KTextEditor::Attribute)
+, m_last_active_view(nullptr)
+, m_active_ctrl_click(false)
 {
 	Q_UNUSED(args);
 	plugin = this;
@@ -61,7 +64,11 @@ MultiCursorPlugin::~MultiCursorPlugin()
 
 void MultiCursorPlugin::addView(KTextEditor::View *view)
 {
-	MultiCursorView *nview = new MultiCursorView(view, m_attr);
+    MultiCursorView *nview = new MultiCursorView(view, m_attr);
+    if (m_active_ctrl_click && m_views.empty()) {
+        QApplication::instance()->installEventFilter(this);
+        m_last_active_view = nview;
+    }
 	m_views.append(nview);
 }
 
@@ -73,7 +80,10 @@ void MultiCursorPlugin::removeView(KTextEditor::View *view)
 			m_views.removeAll(nview);
 			delete nview;
 		}
-	}
+    }
+    if (m_active_ctrl_click && m_views.empty()) {
+        QApplication::instance()->removeEventFilter(this);
+    }
 }
 
 void MultiCursorPlugin::readConfig()
@@ -84,6 +94,7 @@ void MultiCursorPlugin::readConfig()
 	m_attr->setUnderlineColor(cg.readEntry("underline_color", values.underlineColor));
 	int line_style = cg.readEntry("underline_style", values.underlineStyle);
 	m_attr->setUnderlineStyle(QTextCharFormat::UnderlineStyle(line_style));
+    m_active_ctrl_click = cg.readEntry("active_ctrl_click", false);
 }
 
 void MultiCursorPlugin::writeConfig()
@@ -91,7 +102,42 @@ void MultiCursorPlugin::writeConfig()
 	KConfigGroup cg(KGlobal::config(), "MultiCursor Plugin");
 	cg.writeEntry("cursor_brush", m_attr->background().color());
 	cg.writeEntry("underline_color", m_attr->underlineColor());
-	cg.writeEntry("underline_style", int(m_attr->underlineStyle()));
+    cg.writeEntry("underline_style", int(m_attr->underlineStyle()));
+	cg.writeEntry("active_ctrl_click", m_active_ctrl_click);
+}
+
+void MultiCursorPlugin::setActiveCtrlClick(bool active)
+{
+    if (active) {
+        if (!m_views.empty()) {
+            m_last_active_view = m_views.front();
+            if (!m_active_ctrl_click) {
+                QApplication::instance()->installEventFilter(this);
+            }
+        }
+    }
+    else if (m_active_ctrl_click) {
+        QApplication::instance()->removeEventFilter(this);
+    }
+    m_active_ctrl_click = active;
+}
+
+bool MultiCursorPlugin::eventFilter(QObject* obj, QEvent* event)
+{
+    if (event->type() == QEvent::MouseButtonRelease
+     && QApplication::keyboardModifiers() & Qt::ControlModifier) {
+        if (!m_last_active_view->isActiveView()) {
+            for (MultiCursorView * v : m_views) {
+                if (v->isActiveView()) {
+                    m_last_active_view = v;
+                    break;
+                }
+            }
+        }
+        m_last_active_view->setCursorPosition();
+        return false;
+    }
+    return QObject::eventFilter(obj, event);
 }
 
 
@@ -428,6 +474,16 @@ void MultiCursorView::setCursor()
 	} else {
 		setCursor(m_view->cursorPosition());
 	}
+}
+
+void MultiCursorView::setCursorPosition()
+{
+    setCursor(m_view->cursorPosition());
+}
+
+bool MultiCursorView::isActiveView() const
+{
+    return m_view->isActiveView();
 }
 
 void MultiCursorView::textInserted(KTextEditor::Document *doc, const KTextEditor::Range &range)

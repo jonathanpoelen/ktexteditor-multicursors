@@ -82,6 +82,7 @@ public:
 	{ m_attr->setUnderlineStyle(style); }
 	void setUnderlineColor(const QColor& color)
 	{ m_attr->setUnderlineColor(color); }
+	void setActiveCtrlClick(bool);
 
 	QBrush cursorBrush() const
 	{ return m_attr->background(); }
@@ -89,11 +90,18 @@ public:
 	{ return m_attr->underlineStyle(); }
 	QColor underlineColor() const
 	{ return m_attr->underlineColor(); }
+	bool activeCtrlClick() const
+	{ return m_active_ctrl_click; }
+
+protected:
+	bool eventFilter(QObject *obj, QEvent *ev);
 
 private:
 	static MultiCursorPlugin *plugin;
 	QList<MultiCursorView*> m_views;
 	KTextEditor::Attribute::Ptr m_attr;
+	MultiCursorView* m_last_active_view;
+	bool m_active_ctrl_click;
 };
 
 
@@ -189,6 +197,10 @@ private:
 	void removeTextPrev(int length);
 
 	void setCursor(const KTextEditor::Cursor& cursor);
+
+public:
+	void setCursorPosition();
+	bool isActiveView() const;
 
 private:
 	KTextEditor::View *m_view;
