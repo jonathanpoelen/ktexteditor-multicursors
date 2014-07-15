@@ -18,7 +18,8 @@
 #ifndef MULTICURSOR_H
 #define MULTICURSOR_H
 
-#include <list>
+#include <vector>
+#include <memory>
 
 #include <QObject>
 #include <QColor>
@@ -111,18 +112,13 @@ private:
 	class Cursor
 	{
 	public:
-		Cursor(KTextEditor::MovingRange * range)
+		Cursor(KTextEditor::MovingRange * range) noexcept
 		: m_range(range)
 		{}
 
-		Cursor(Cursor && other)
-		: m_range(other.m_range)
-		{ other.m_range = 0; }
-
-		Cursor(const Cursor&) = delete;
-
-		~Cursor()
-		{ delete m_range; }
+		Cursor(Cursor && other) = default;
+		Cursor& operator=(Cursor && other) = default;
+		Cursor& operator=(Cursor const & other) = delete;
 
 		KTextEditor::Attribute::Ptr attribute()
 		{ return m_range->attribute(); }
@@ -146,10 +142,10 @@ private:
 		{ setCursor(line(), column()); }
 
 	private:
-		KTextEditor::MovingRange * m_range;
+		std::unique_ptr<KTextEditor::MovingRange> m_range;
 	};
-	///TODO std::list -> QList ? falcon::ordered_vector/ordered_list, ordered_container< QList> ? boost::flat_set ?
-	typedef std::list<Cursor> CursorList;
+	///TODO boost::flat_set ?
+	typedef std::vector<Cursor> CursorList;
 
 private slots:
 	void exclusiveEditStart(KTextEditor::Document*);

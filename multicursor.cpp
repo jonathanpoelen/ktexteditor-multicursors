@@ -107,12 +107,12 @@ public:
 	template<typename _Functor>
 	static CursorList::iterator
 	find(CursorList& cont, _Functor func, CursorRef cursor)
-	{ return find<>(cont.begin(), cont.end(), func, cursor); }
+	{ return find(cont.begin(), cont.end(), func, cursor); }
 
 	template<typename _Functor>
 	static CursorList::reverse_iterator
 	reverse_find(CursorList& cont, _Functor func, CursorRef cursor)
-	{ return find<>(cont.rbegin(), cont.rend(), func, cursor); }
+	{ return find(cont.rbegin(), cont.rend(), func, cursor); }
 
 	template<typename _Functor, typename _Iterator>
 	static _Iterator find(_Iterator it, const _Iterator& end,
@@ -147,8 +147,7 @@ public:
 	}
 };
 
-MultiCursorView::MultiCursorView(KTextEditor::View *view,
-																 KTextEditor::Attribute::Ptr attr)
+MultiCursorView::MultiCursorView(KTextEditor::View *view, KTextEditor::Attribute::Ptr attr)
 : QObject(view)
 , KXMLGUIClient(view)
 , m_view(view)
@@ -165,10 +164,10 @@ MultiCursorView::MultiCursorView(KTextEditor::View *view,
 	KActionCollection* collection = actionCollection();
 	KAction *action;
 
-#define ENTRY(_Text, _Name, _Receiver) \
-	action = new KAction(i18n(_Text), this);\
-	collection->addAction(_Name, action);\
-	connect(action, SIGNAL(triggered()), this, SLOT(_Receiver));
+#define ENTRY(Text, Name, Receiver) \
+	action = new KAction(i18n(Text), this);\
+	collection->addAction(Name, action);\
+	connect(action, SIGNAL(triggered()), this, SLOT(Receiver));
 
 	/*ENTRY("info cursors", "info_multicursor", debug());
 	action->setShortcut(Qt::CTRL + Qt::ALT + Qt::Key_I);*/
@@ -209,10 +208,7 @@ MultiCursorView::MultiCursorView(KTextEditor::View *view,
 }
 
 MultiCursorView::~MultiCursorView()
-{
-	m_cursors.clear();
-	actionEmptyCurses();
-}
+{}
 
 void MultiCursorView::exclusiveEditStart(KTextEditor::Document *doc)
 {
@@ -317,10 +313,10 @@ void MultiCursorView::cursorPositionChanged(KTextEditor::View*, const KTextEdito
 {
 	int l1 = m_cursor.line();
 	int l2 = cursor.line();
-	int line = l2-l1;
-	int c1 = m_cursor.column();
-	int c2 = cursor.column();
-	int column = c2-c1;
+	const int line = l2-l1;
+	const int c1 = m_cursor.column();
+	const int c2 = cursor.column();
+	const int column = c2-c1;
 
 	m_cursor = cursor;
 
@@ -328,12 +324,11 @@ void MultiCursorView::cursorPositionChanged(KTextEditor::View*, const KTextEdito
 		return ;
 
 	if (0 == column && line < 0) {
-			CursorList::iterator first = m_cursors.begin();
-			CursorList::iterator last = m_cursors.end();
-			while (first != last && first->line() < -line) {
-				first = m_cursors.erase(first);
-			}
-			CursorListDetail::move_line(m_document, m_cursors, [](Cursor&){return true;}, first, line);
+        auto first = std::find_if(m_cursors.begin(), m_cursors.end(), [line](Cursor& c){
+            return c.line() < -line;
+        });
+        first = m_cursors.erase(m_cursors.begin(), first);
+        CursorListDetail::move_line(m_document, m_cursors, [](Cursor&){return true;}, first, line);
 	}
 	else if (0 == column && line > 0) {
 		int last_line = m_document->lines();
@@ -360,15 +355,16 @@ void MultiCursorView::cursorPositionChanged(KTextEditor::View*, const KTextEdito
 			KTextEditor::Cursor cur = recoil(first->cursor(), n, -1);
 			if (cur.isValid()) {
 				first->setCursor(cur);
-				++first;
 				break;
 			}
-			m_cursors.pop_front();
-			first = m_cursors.begin();
+			++first;
 		}
-		for (; first != last; ++first) {
-			first->setCursor(recoil(first->cursor(), n, -1));
-		}
+		first = m_cursors.erase(m_cursors.begin(), first);
+        if (first != last) {
+            while (++first != last) {
+                first->setCursor(recoil(first->cursor(), n, -1));
+            }
+        }
 	}
 	else {
 		int n = line ? c2 + m_document->lineLength(l1) - (c1 + line) + 2 : column;
@@ -404,12 +400,12 @@ void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
 		range->setAttribute(m_attr);
 
 		if (m_cursors.empty()) {
-			m_cursors.emplace_front<>(range);
+			m_cursors.emplace(m_cursors.begin(), range);
 			actionStartCurses();
 		}
 		else {
-			m_cursors.emplace<>(
-				std::find_if<>(
+			m_cursors.emplace(
+				std::find_if(
 					m_cursors.begin(),
 					m_cursors.end(),
 					[range](CursorList::value_type& moving){
@@ -535,7 +531,7 @@ void MultiCursorView::removeAll()
 		CursorList::iterator first = CursorListDetail::find(m_cursors, CursorListDetail::greater_equal(), range.start());
 		CursorList::iterator end = m_cursors.end();
 		if (first != end) {
-			CursorList::iterator last = CursorListDetail::find<>(first, end, CursorListDetail::greater_equal(), range.end());
+			CursorList::iterator last = CursorListDetail::find(first, end, CursorListDetail::greater_equal(), range.end());
 			if (last != end) {
 				m_cursors.erase(first, last);
 				if (m_cursors.empty())
@@ -550,15 +546,11 @@ void MultiCursorView::removeAll()
 
 void MultiCursorView::removeLine()
 {
-	int line = m_view->cursorPosition().line();
-	CursorList::iterator it = m_cursors.begin();
-	CursorList::iterator last = m_cursors.end();
-	while (it != last && it->line() != line) {
-		++it;
-	}
-	while (it != last && it->line() == line) {
-		it = m_cursors.erase(it);
-	}
+	const int line = m_view->cursorPosition().line();
+	CursorList::iterator first = std::find_if(m_cursors.begin(), m_cursors.end(),
+                                              [line](Cursor & c) { return c.line() != line; });
+    m_cursors.erase(first, std::find_if(first, m_cursors.end(),
+                                        [line](Cursor & c) { return c.line() == line; }));
 	if (m_cursors.empty())
 		actionEmptyCurses();
 }
@@ -574,7 +566,7 @@ void MultiCursorView::removeTextNext(int length)
 		cursor = advance(it->cursor(), length, prev->cursor().line()+1);
 		if (prev->cursor() <= cursor) {
 			m_document->removeText(KTextEditor::Range(it->cursor(), prev->cursor()));
-			m_cursors.erase(it.base());
+			prev = CursorList::reverse_iterator(m_cursors.erase(it.base()));
 			it = prev;
 		} else {
 			m_document->removeText(KTextEditor::Range(it->cursor(), cursor));
@@ -597,6 +589,7 @@ void MultiCursorView::removeTextPrev(int length)
 		if (cursor_prev >= cursor) {
 			m_document->removeText(KTextEditor::Range(first->cursor(), cursor_prev));
 			first = m_cursors.erase(--first);
+            last = m_cursors.end();
 			cursor_prev = cursor;
 		} else {
 			m_document->removeText(KTextEditor::Range(first->cursor(), cursor));
@@ -612,7 +605,7 @@ void MultiCursorView::moveNext()
 
 void MultiCursorView::movePrev()
 {
-	CursorList::reverse_iterator it = CursorListDetail::reverse_find<>(m_cursors, CursorListDetail::less(), m_view->cursorPosition());
+	CursorList::reverse_iterator it = CursorListDetail::reverse_find(m_cursors, CursorListDetail::less(), m_view->cursorPosition());
 	m_view->setCursorPosition(it != m_cursors.rend() ? it->cursor() : m_cursors.back().cursor());
 }
 

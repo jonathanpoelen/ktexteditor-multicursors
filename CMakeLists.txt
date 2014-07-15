@@ -17,5 +17,4 @@ install(FILES multicursorui.rc DESTINATION ${DATA_INSTALL_DIR}/ktexteditor_multi
 
 install(FILES ktexteditor_multicursor.desktop ktexteditor_multicursor_config.desktop DESTINATION ${SERVICES_INSTALL_DIR})
 
-#forcing c++11 for rvalue-reference in list<unique_ptr<T>> (g++)
-add_definitions(-std=c++0x)
+add_definitions(-std=c++11)
