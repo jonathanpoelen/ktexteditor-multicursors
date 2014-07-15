@@ -199,7 +199,7 @@ private:
 	void setCursor(const KTextEditor::Cursor& cursor);
 
 public:
-	void setCursorPosition();
+	void setCursorOnCurrentPosition();
 	bool isActiveView() const;
 
 private:

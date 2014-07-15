@@ -134,7 +134,7 @@ bool MultiCursorPlugin::eventFilter(QObject* obj, QEvent* event)
                 }
             }
         }
-        m_last_active_view->setCursorPosition();
+        m_last_active_view->setCursorOnCurrentPosition();
         return false;
     }
     return QObject::eventFilter(obj, event);
@@ -476,7 +476,7 @@ void MultiCursorView::setCursor()
 	}
 }
 
-void MultiCursorView::setCursorPosition()
+void MultiCursorView::setCursorOnCurrentPosition()
 {
     setCursor(m_view->cursorPosition());
 }
@@ -502,8 +502,7 @@ void MultiCursorView::insertText(const QString &text)
 	}
 }
 
-KTextEditor::Cursor MultiCursorView::advance(const KTextEditor::Cursor& cursor,
-																						 int length, int endline) const
+KTextEditor::Cursor MultiCursorView::advance(const KTextEditor::Cursor& cursor, int length, int endline) const
 {
 	KTextEditor::Cursor ret(cursor);
 	int line_length = m_document->lineLength(cursor.line());
@@ -532,8 +531,7 @@ KTextEditor::Cursor MultiCursorView::advance(const KTextEditor::Cursor& cursor,
 	return ret;
 }
 
-KTextEditor::Cursor MultiCursorView::recoil(const KTextEditor::Cursor& cursor,
-																						int length, int minline) const
+KTextEditor::Cursor MultiCursorView::recoil(const KTextEditor::Cursor& cursor, int length, int minline) const
 {
 	if (cursor.column() >= length)
 		return KTextEditor::Cursor(cursor.line(), cursor.column() - length);
@@ -638,14 +636,14 @@ void MultiCursorView::removeTextPrev(int length)
 {
 	CursorList::iterator first = m_cursors.begin();
 	CursorList::iterator last = m_cursors.end();
-	m_document->removeText(KTextEditor::Range(first->cursor(), recoil(first->cursor(), length)));
+    m_document->removeText(KTextEditor::Range(first->cursor(), recoil(first->cursor(), length)));
 	KTextEditor::Cursor cursor_prev = first->cursor();
 	while (++first != last) {
-		KTextEditor::Cursor cursor = recoil(first->cursor(), length, cursor_prev.line());
-		if (cursor_prev >= cursor) {
+        KTextEditor::Cursor cursor = recoil(first->cursor(), length, cursor_prev.line());
+        if (cursor_prev >= cursor) {
 			m_document->removeText(KTextEditor::Range(first->cursor(), cursor_prev));
 			first = m_cursors.erase(--first);
-            last = m_cursors.end();
+			last = m_cursors.end();
 			cursor_prev = cursor;
 		} else {
 			m_document->removeText(KTextEditor::Range(first->cursor(), cursor));
