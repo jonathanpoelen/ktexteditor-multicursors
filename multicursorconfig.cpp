@@ -1,4 +1,4 @@
- /*
+/*
 * This file is part of Katepart
 *
 * This program is free software: you can redistribute it and/or modify
@@ -108,7 +108,7 @@ void MultiCursorConfig::save()
 		int index = m_underline_style->currentIndex();
 		self->setUnderlineStyle(QTextCharFormat::UnderlineStyle(index));
 		self->setUnderlineColor(m_underline_color->color());
-		self->setActiveCtrlClick(m_active_ctrl_click->isEnabled());
+		self->setActiveCtrlClick(m_active_ctrl_click->isChecked());
 		self->writeConfig();
 	}
 	else
@@ -140,7 +140,7 @@ void MultiCursorConfig::load()
 		m_cursor_color->setColor(cg.readEntry("cursor_color", values.cursorColor));
 		m_underline_color->setColor(cg.readEntry("underline_color", values.underlineColor));
 		m_underline_style->setCurrentIndex(cg.readEntry("underline_style", values.underlineStyle));
-		m_active_ctrl_click->setChecked(cg.readEntry("active_ctrl_click" , false));
+		m_active_ctrl_click->setChecked(cg.readEntry("active_ctrl_click" , true));
 	}
 	emit changed(false);
 }
@@ -152,7 +152,7 @@ void MultiCursorConfig::defaults()
 	m_underline_style->setCurrentIndex(values.underlineStyle);
 	m_underline_color->setColor(values.underlineColor);
 	m_active_ctrl_click->setCheckable(true);
-	m_active_ctrl_click->setChecked(false);
+	m_active_ctrl_click->setChecked(true);
 	emit changed(true);
 }
 

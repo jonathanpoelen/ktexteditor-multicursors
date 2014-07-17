@@ -94,7 +94,7 @@ void MultiCursorPlugin::readConfig()
 	m_attr->setUnderlineColor(cg.readEntry("underline_color", values.underlineColor));
 	int line_style = cg.readEntry("underline_style", values.underlineStyle);
 	m_attr->setUnderlineStyle(QTextCharFormat::UnderlineStyle(line_style));
-    m_active_ctrl_click = cg.readEntry("active_ctrl_click", false);
+	m_active_ctrl_click = cg.readEntry("active_ctrl_click", true);
 }
 
 void MultiCursorPlugin::writeConfig()

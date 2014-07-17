@@ -1,27 +1,29 @@
 ktexteditor-mcursors
 ====================
 
-Plugin-based software katepart that adds or removes virtual cursor in a document. All written or deleted text will be repeated on each slider.
-mkdir build
+Katepart plugin (Kwrite, Kate, Kdevelop, ...) that adds or deletes virtual cursors in a document.
+Any text written or deleted will be repeated on each virtual cursor.
 
 ### Several options are available
 
- - Synchronize cursors with virtual sliders.
- - Move between cursors
- - Disable cursor without deleting
- - Delete all the cursors or those located on the line
+ - Synchronize virtual cursors with the user cursor.
+ - Move between virtual cursors.
+ - Disable virtual cursors without deleting.
+ - Delete all the virtual cursors or those located on the line.
+ - Add a virtual cursor with ctrl+click (in plugin configuration).
 
 ### If a selection is present
 
- - Add a cursor is for all lines of the selection
- - Removes all cursors only takes effect in the selection
+ - Add a virtual cursor for each lines of the selection.
+ - Removes all virtual cursors in the selection.
 
 Install
 -------
 
 ```sh
+mkdir build
 cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=$(kde4-config --prefix)
+cmake .. -DCMAKE_INSTALL_PREFIX=$(kde4-config --prefix) -DQT_QMAKE_EXECUTABLE=/usr/bin/qmake-qt4
 make
 sudo make install
 ```
@@ -31,7 +33,7 @@ or
 ```sh
 mkdir build
 cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=$(kde4-config --localprefix)
+cmake .. -DCMAKE_INSTALL_PREFIX=$(kde4-config --localprefix) -DQT_QMAKE_EXECUTABLE=/usr/bin/qmake-qt4
 make
 make install
 ```
