@@ -124,21 +124,22 @@ void MultiCursorPlugin::setActiveCtrlClick(bool active)
 
 bool MultiCursorPlugin::eventFilter(QObject* obj, QEvent* event)
 {
-    if (event->type() == QEvent::MouseButtonRelease
-     && QApplication::keyboardModifiers() & Qt::ControlModifier) {
-        if (!m_last_active_view->isActiveView()) {
+    if (event->type() == QEvent::MouseButtonRelease) {
+        if (!m_last_active_view->isView(obj)) {
             for (MultiCursorView * v : m_views) {
-                if (v->isActiveView()) {
+                if (v->isView(obj)) {
                     m_last_active_view = v;
                     break;
                 }
             }
         }
-        m_last_active_view->setCursorOnCurrentPosition();
+        if (QApplication::keyboardModifiers() & Qt::ControlModifier) {
+            m_last_active_view->setCursorOnCurrentPosition();
+        }
+        else {
+            m_last_active_view->removeAll();
+        }
         return false;
-    } else if (event->type() == QEvent::MouseButtonRelease) {
-    	m_last_active_view->removeAll();
-    	return false;
     }
     return QObject::eventFilter(obj, event);
 }
@@ -484,9 +485,10 @@ void MultiCursorView::setCursorOnCurrentPosition()
     setCursor(m_view->cursorPosition());
 }
 
-bool MultiCursorView::isActiveView() const
+bool MultiCursorView::isView(const QObject * v) const
 {
-    return m_view->isActiveView();
+    // KateViewInternal
+    return m_view->focusProxy() == v;
 }
 
 void MultiCursorView::textInserted(KTextEditor::Document *doc, const KTextEditor::Range &range)

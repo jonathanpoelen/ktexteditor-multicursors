@@ -200,7 +200,7 @@ private:
 public:
 	void setCursorOnCurrentPosition();
 	void removeAll();
-	bool isActiveView() const;
+	bool isView(QObject const * p) const;
 
 private:
 	KTextEditor::View *m_view;
