@@ -136,6 +136,9 @@ bool MultiCursorPlugin::eventFilter(QObject* obj, QEvent* event)
         }
         m_last_active_view->setCursorOnCurrentPosition();
         return false;
+    } else if (event->type() == QEvent::MouseButtonRelease) {
+    	m_last_active_view->removeAll();
+    	return false;
     }
     return QObject::eventFilter(obj, event);
 }

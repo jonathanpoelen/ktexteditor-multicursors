@@ -165,7 +165,6 @@ private slots:
 	void textDelete();
 
 	void setCursor();
-	void removeAll();
 	void removeLine();
 
 	void moveNext();
@@ -200,6 +199,7 @@ private:
 
 public:
 	void setCursorOnCurrentPosition();
+	void removeAll();
 	bool isActiveView() const;
 
 private:
