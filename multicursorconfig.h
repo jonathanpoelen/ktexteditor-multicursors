@@ -45,6 +45,7 @@ private:
 	KComboBox * m_underline_style;
 	KColorButton * m_underline_color;
 	QCheckBox * m_active_ctrl_click;
+	QCheckBox * m_remove_cursor_if_only_click;
 };
 
 #endif // MCURSORS_CONFIG_H

@@ -48,7 +48,7 @@ MultiCursorPlugin::MultiCursorPlugin(QObject *parent, const QVariantList &args)
 : KTextEditor::Plugin(parent)
 , m_views()
 , m_attr(new KTextEditor::Attribute)
-, m_last_active_view(nullptr)
+, m_remove_cursor_if_only_click(false)
 , m_active_ctrl_click(false)
 {
 	Q_UNUSED(args);
@@ -65,11 +65,10 @@ MultiCursorPlugin::~MultiCursorPlugin()
 void MultiCursorPlugin::addView(KTextEditor::View *view)
 {
     MultiCursorView *nview = new MultiCursorView(view, m_attr);
-    if (m_active_ctrl_click && m_views.empty()) {
-        QApplication::instance()->installEventFilter(this);
-        m_last_active_view = nview;
+    if (m_active_ctrl_click) {
+        nview->setActiveCtrlClick(true, m_remove_cursor_if_only_click);
     }
-	m_views.append(nview);
+    m_views.append(nview);
 }
 
 void MultiCursorPlugin::removeView(KTextEditor::View *view)
@@ -94,6 +93,7 @@ void MultiCursorPlugin::readConfig()
 	m_attr->setUnderlineColor(cg.readEntry("underline_color", values.underlineColor));
 	int line_style = cg.readEntry("underline_style", values.underlineStyle);
 	m_attr->setUnderlineStyle(QTextCharFormat::UnderlineStyle(line_style));
+    m_remove_cursor_if_only_click = cg.readEntry("remove_cursor_if_only_click", false);
 	m_active_ctrl_click = cg.readEntry("active_ctrl_click", true);
 }
 
@@ -103,45 +103,17 @@ void MultiCursorPlugin::writeConfig()
 	cg.writeEntry("cursor_brush", m_attr->background().color());
 	cg.writeEntry("underline_color", m_attr->underlineColor());
     cg.writeEntry("underline_style", int(m_attr->underlineStyle()));
+    cg.writeEntry("remove_cursor_if_only_click", m_remove_cursor_if_only_click);
 	cg.writeEntry("active_ctrl_click", m_active_ctrl_click);
 }
 
-void MultiCursorPlugin::setActiveCtrlClick(bool active)
+void MultiCursorPlugin::setActiveCtrlClick(bool active, bool remove_cursor_if_only_click)
 {
-    if (active) {
-        if (!m_views.empty()) {
-            m_last_active_view = m_views.front();
-            if (!m_active_ctrl_click) {
-                QApplication::instance()->installEventFilter(this);
-            }
-        }
-    }
-    else if (m_active_ctrl_click) {
-        QApplication::instance()->removeEventFilter(this);
-    }
     m_active_ctrl_click = active;
-}
-
-bool MultiCursorPlugin::eventFilter(QObject* obj, QEvent* event)
-{
-    if (event->type() == QEvent::MouseButtonRelease) {
-        if (!m_last_active_view->isView(obj)) {
-            for (MultiCursorView * v : m_views) {
-                if (v->isView(obj)) {
-                    m_last_active_view = v;
-                    break;
-                }
-            }
-        }
-        if (QApplication::keyboardModifiers() & Qt::ControlModifier) {
-            m_last_active_view->setCursorOnCurrentPosition();
-        }
-        else {
-            m_last_active_view->removeAll();
-        }
-        return false;
+    m_remove_cursor_if_only_click = remove_cursor_if_only_click;
+    for (MultiCursorView * v: m_views) {
+        v->setActiveCtrlClick(active, remove_cursor_if_only_click);
     }
-    return QObject::eventFilter(obj, event);
 }
 
 
@@ -206,6 +178,7 @@ MultiCursorView::MultiCursorView(KTextEditor::View *view, KTextEditor::Attribute
 , m_text_edit(false)
 , m_active(true)
 , m_synchronize(false)
+, m_remove_cursor_if_only_click(false)
 , m_cursor()
 , m_attr(attr)
 {
@@ -480,15 +453,30 @@ void MultiCursorView::setCursor()
 	}
 }
 
-void MultiCursorView::setCursorOnCurrentPosition()
+void MultiCursorView::setActiveCtrlClick(bool active, bool remove_cursor_if_only_click)
 {
-    setCursor(m_view->cursorPosition());
+    m_remove_cursor_if_only_click = remove_cursor_if_only_click;
+    if (active) {
+      m_view->focusProxy()->installEventFilter(this);
+    }
+    else {
+      m_view->focusProxy()->removeEventFilter(this);
+    }
 }
 
-bool MultiCursorView::isView(const QObject * v) const
+bool MultiCursorView::eventFilter(QObject* obj, QEvent* event)
 {
-    // KateViewInternal
-    return m_view->focusProxy() == v;
+    if (event->type() == QEvent::MouseButtonRelease) {
+        if (QApplication::keyboardModifiers() & Qt::ControlModifier) {
+            setCursor(m_view->cursorPosition());
+            return false;
+        }
+        else if (m_remove_cursor_if_only_click) {
+            removeAll();
+            return false;
+        }
+    }
+    return QObject::eventFilter(obj, event);
 }
 
 void MultiCursorView::textInserted(KTextEditor::Document *doc, const KTextEditor::Range &range)

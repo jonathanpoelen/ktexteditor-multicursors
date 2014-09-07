@@ -50,11 +50,15 @@ public:
 		QColor cursorColor;
 		int underlineStyle;
 		QColor underlineColor;
+		bool activeCtrlClick;
+		bool removeCursorIfOnlyClick;
 
 		DefaultValues()
 		: cursorColor(0,0,0,40)
 		, underlineStyle(1)
 		, underlineColor(Qt::red)
+		, activeCtrlClick(true)
+		, removeCursorIfOnlyClick(false)
 		{}
 	};
 
@@ -82,7 +86,7 @@ public:
 	{ m_attr->setUnderlineStyle(style); }
 	void setUnderlineColor(const QColor& color)
 	{ m_attr->setUnderlineColor(color); }
-	void setActiveCtrlClick(bool);
+  void setActiveCtrlClick(bool active, bool remove_cursor_if_only_click);
 
 	QBrush cursorBrush() const
 	{ return m_attr->background(); }
@@ -90,17 +94,16 @@ public:
 	{ return m_attr->underlineStyle(); }
 	QColor underlineColor() const
 	{ return m_attr->underlineColor(); }
-	bool activeCtrlClick() const
-	{ return m_active_ctrl_click; }
-
-protected:
-	bool eventFilter(QObject *obj, QEvent *ev);
+  bool activeCtrlClick() const
+  { return m_active_ctrl_click; }
+	bool activeRemovedCursorIfOnlyClick() const
+	{ return m_remove_cursor_if_only_click; }
 
 private:
 	static MultiCursorPlugin *plugin;
 	QList<MultiCursorView*> m_views;
 	KTextEditor::Attribute::Ptr m_attr;
-	MultiCursorView* m_last_active_view;
+	bool m_remove_cursor_if_only_click;
 	bool m_active_ctrl_click;
 };
 
@@ -191,16 +194,17 @@ protected:
 	KTextEditor::Cursor advance(const KTextEditor::Cursor&, int length, int endline) const;
 	KTextEditor::Cursor recoil(const KTextEditor::Cursor&, int length, int minline = 0) const;
 
+  bool eventFilter(QObject *obj, QEvent *ev);
+
 private:
 	void removeTextNext(int length);
 	void removeTextPrev(int length);
 
 	void setCursor(const KTextEditor::Cursor& cursor);
+	void removeAll();
 
 public:
-	void setCursorOnCurrentPosition();
-	void removeAll();
-	bool isView(QObject const * p) const;
+	void setActiveCtrlClick(bool active, bool remove_cursor_if_only_click);
 
 private:
 	KTextEditor::View *m_view;
@@ -209,6 +213,7 @@ private:
 	bool m_text_edit;
 	bool m_active;
 	bool m_synchronize;
+	bool m_remove_cursor_if_only_click;
 	KTextEditor::Cursor m_cursor;
 	CursorList m_cursors;
 	KTextEditor::Attribute::Ptr m_attr;

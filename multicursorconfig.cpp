@@ -25,7 +25,6 @@
 #include <KColorButton>
 #include <KComboBox>
 #include <KLineEdit>
-#include <KLineEdit>
 #include <QtGui/QTextCharFormat>
 #include <QtGui/QBoxLayout>
 #include <QtGui/QCheckBox>
@@ -65,11 +64,12 @@ MultiCursorConfig::MultiCursorConfig(QWidget *parent, const QVariantList &args)
 	layout->addLayout(hlayout);
 
 	hlayout = new QHBoxLayout(this);
-	m_active_ctrl_click = new QCheckBox(this);
-	QLabel * lactive_ctrl_click = new QLabel(i18n("Set cursor with Ctrl+Click"));
-	hlayout->addWidget(lactive_ctrl_click);
-	hlayout->addWidget(m_active_ctrl_click);
-	layout->addLayout(hlayout);
+	m_active_ctrl_click = new QCheckBox(i18n("Set cursor with Ctrl+Click"), this);
+	layout->addWidget(m_active_ctrl_click);
+
+	hlayout = new QHBoxLayout(this);
+	m_remove_cursor_if_only_click = new QCheckBox(i18n("Removing all cursors on click without Ctrl"), this);
+	layout->addWidget(m_remove_cursor_if_only_click);
 
 	setLayout(layout);
 
@@ -83,11 +83,15 @@ MultiCursorConfig::MultiCursorConfig(QWidget *parent, const QVariantList &args)
 									 this, SLOT(slotChanged()));
 	QObject::connect(m_active_ctrl_click, SIGNAL(stateChanged(int)),
 									 this, SLOT(slotChanged()));
+	QObject::connect(m_remove_cursor_if_only_click, SIGNAL(stateChanged(int)),
+									 this, SLOT(slotChanged()));
 
 	QObject::connect(m_underline_style, SIGNAL(currentIndexChanged(int)),
 									 m_underline_color, SLOT(setEnabled(bool)));
 	QObject::connect(m_underline_style, SIGNAL(currentIndexChanged(int)),
 									 lunderline_color, SLOT(setEnabled(bool)));
+	QObject::connect(m_active_ctrl_click, SIGNAL(toggled(bool)),
+									 m_remove_cursor_if_only_click, SLOT(setEnabled(bool)));
 }
 
 MultiCursorConfig::~MultiCursorConfig()
@@ -108,7 +112,7 @@ void MultiCursorConfig::save()
 		int index = m_underline_style->currentIndex();
 		self->setUnderlineStyle(QTextCharFormat::UnderlineStyle(index));
 		self->setUnderlineColor(m_underline_color->color());
-		self->setActiveCtrlClick(m_active_ctrl_click->isChecked());
+		self->setActiveCtrlClick(m_active_ctrl_click->isChecked(), m_remove_cursor_if_only_click->isChecked());
 		self->writeConfig();
 	}
 	else
@@ -118,6 +122,7 @@ void MultiCursorConfig::save()
 		cg.writeEntry("underline_style", m_underline_style->currentIndex());
 		cg.writeEntry("underline_color", m_underline_color->text());
 		cg.writeEntry("active_ctrl_click", m_active_ctrl_click->isChecked());
+		cg.writeEntry("remove_cursor_if_only_click", m_remove_cursor_if_only_click->isChecked());
 	}
 	emit changed(false);
 }
@@ -132,6 +137,7 @@ void MultiCursorConfig::load()
 		m_underline_color->setColor(self->underlineColor());
 		m_underline_style->setCurrentIndex(self->underlineStyle());
 		m_active_ctrl_click->setChecked(self->activeCtrlClick());
+		m_remove_cursor_if_only_click->setChecked(self->activeRemovedCursorIfOnlyClick());
 	}
 	else
 	{
@@ -140,7 +146,8 @@ void MultiCursorConfig::load()
 		m_cursor_color->setColor(cg.readEntry("cursor_color", values.cursorColor));
 		m_underline_color->setColor(cg.readEntry("underline_color", values.underlineColor));
 		m_underline_style->setCurrentIndex(cg.readEntry("underline_style", values.underlineStyle));
-		m_active_ctrl_click->setChecked(cg.readEntry("active_ctrl_click" , true));
+		m_remove_cursor_if_only_click->setChecked(cg.readEntry("remove_cursor_if_only_click" , values.activeCtrlClick));
+		m_active_ctrl_click->setChecked(cg.readEntry("active_ctrl_click" , values.activeCtrlClick));
 	}
 	emit changed(false);
 }
