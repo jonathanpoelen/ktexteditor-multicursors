@@ -178,7 +178,10 @@ private slots:
 	void setSynchronize();
 	void cursorPositionChanged(KTextEditor::View*, const KTextEditor::Cursor&);
 
-	//void debug() const;
+  void removeAll();
+
+// private:
+//    void debug() const;
 
 protected:
 	bool endEditing();
@@ -201,7 +204,6 @@ private:
 	void removeTextPrev(int length);
 
 	void setCursor(const KTextEditor::Cursor& cursor);
-	void removeAll();
 
 public:
 	void setActiveCtrlClick(bool active, bool remove_cursor_if_only_click);
