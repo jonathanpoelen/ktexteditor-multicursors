@@ -17,6 +17,17 @@ Any text written or deleted will be repeated on each virtual cursor.
  - Add a virtual cursor for each lines of the selection.
  - Removes all virtual cursors in the selection.
 
+
+Dependencies
+------------
+
+Debian and derived:
+ - kdelibs5-dev
+
+Other distros:
+ - kdelibs5-devel
+
+
 Install
 -------
 
@@ -37,6 +48,7 @@ cmake .. -DCMAKE_INSTALL_PREFIX=$(kde4-config --localprefix) -DQT_QMAKE_EXECUTAB
 make
 make install
 ```
+
 
 Old version
 -----------
