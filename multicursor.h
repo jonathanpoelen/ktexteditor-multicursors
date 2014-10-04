@@ -155,6 +155,9 @@ private:
 		bool operator<(const KTextEditor::Cursor& cursor) const
 		{ return this->cursor() < cursor; }
 
+		friend bool operator<(const KTextEditor::Cursor& c1, const Cursor & c2)
+		{ return c1 < c2.cursor(); }
+
 		void revalid()
 		{ setCursor(line(), column()); }
 
