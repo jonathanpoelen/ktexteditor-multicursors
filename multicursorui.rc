@@ -5,7 +5,8 @@
 		<separator group="tools_multicursor" />
 		<Action name="set_multicursor" group="tools_multicursor"/>
 		<Menu name="multicursor"><text>&amp;MultiCursor</text>
-			<Action name="backspace_multicursor" group="multicursor_multicursor"/>
+      <Action name="backspace_multicursor" group="multicursor_multicursor"/>
+			<Action name="del_multicursor" group="multicursor_multicursor"/>
 			<Action name="remove_all_multicursor" group="multicursor_multicursor"/>
 			<Action name="remove_line_multicursor" group="multicursor_multicursor"/>
 			<Action name="move_next_multicursor" group="multicursor_multicursor"/>

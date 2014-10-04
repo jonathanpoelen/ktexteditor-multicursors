@@ -114,7 +114,7 @@ class MultiCursorView
 {
 	Q_OBJECT
 
-	class CursorListDetail;
+  class CursorListDetail;
 public:
 	explicit MultiCursorView(KTextEditor::View *view, KTextEditor::Attribute::Ptr);
 	~MultiCursorView();
@@ -148,6 +148,12 @@ private:
 
 		void setCursor(int line, int column)
 		{ m_range->setRange(KTextEditor::Range(line, column, line, column+1)); }
+
+		bool operator==(const KTextEditor::Cursor& cursor) const
+		{ return this->cursor() == cursor; }
+
+		bool operator<(const KTextEditor::Cursor& cursor) const
+		{ return this->cursor() < cursor; }
 
 		void revalid()
 		{ setCursor(line(), column()); }
@@ -194,15 +200,10 @@ protected:
 	void actionEmptyCurses();
 	void actionStartCurses();
 	void setEnabled(bool);
-	KTextEditor::Cursor advance(const KTextEditor::Cursor&, int length, int endline) const;
-	KTextEditor::Cursor recoil(const KTextEditor::Cursor&, int length, int minline = 0) const;
 
   bool eventFilter(QObject *obj, QEvent *ev);
 
 private:
-	void removeTextNext(int length);
-	void removeTextPrev(int length);
-
 	void setCursor(const KTextEditor::Cursor& cursor);
 
 public:
