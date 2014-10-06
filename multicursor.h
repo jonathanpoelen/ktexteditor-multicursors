@@ -186,6 +186,7 @@ private slots:
 
 	void setSynchronize();
 	void cursorPositionChanged(KTextEditor::View*, const KTextEditor::Cursor&);
+  void selectionChanged (KTextEditor::View*);
 
   void removeAll();
 

@@ -313,6 +313,10 @@ MultiCursorView::MultiCursorView(KTextEditor::View *view, KTextEditor::Attribute
 
 	setEnabled(false);
 	setXMLFile("multicursorui.rc");
+
+
+	// TODO
+    connect(m_view, SIGNAL(selectionChanged(KTextEditor::View*)), this, SLOT(selectionChanged(KTextEditor::View*)));
 }
 
 MultiCursorView::~MultiCursorView()
@@ -501,6 +505,23 @@ void MultiCursorView::cursorPositionChanged(KTextEditor::View*, const KTextEdito
 
 	if (m_cursors.empty())
 		actionEmptyCurses();
+}
+
+// TODO
+KTextEditor::Range m_range;
+void MultiCursorView::selectionChanged(KTextEditor::View*)
+{
+  if (m_view->selection()) {
+    m_range = m_view->selectionRange();
+  }
+  else {
+    if (m_range.isValid()) {
+      KTextEditor::MovingRange * range = m_smart->newMovingRange(m_range);
+      range->setAttribute(m_attr);
+      m_cursors.push_back(range);
+    }
+    m_range = m_range.invalid();
+  }
 }
 
 void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
