@@ -509,6 +509,7 @@ void MultiCursorView::cursorPositionChanged(KTextEditor::View*, const KTextEdito
 
 // TODO
 KTextEditor::Range m_range;
+// only if multi-selection mode (and with mouse ?)
 void MultiCursorView::selectionChanged(KTextEditor::View*)
 {
   if (m_view->selection()) {
@@ -516,9 +517,44 @@ void MultiCursorView::selectionChanged(KTextEditor::View*)
   }
   else {
     if (m_range.isValid()) {
-      KTextEditor::MovingRange * range = m_smart->newMovingRange(m_range);
-      range->setAttribute(m_attr);
-      m_cursors.push_back(range);
+      // TODO addSelection(const KTextEditor::Range &)
+      //@{
+      auto it_start = std::lower_bound(
+        m_cursors.begin(), m_cursors.end(), m_range.start(),
+        [](Cursor const & c1, KTextEditor::Cursor const & c2){
+          return c1.end() < c2;
+        }
+      );
+      auto it_end = std::lower_bound(it_start, m_cursors.end(), m_range.end());
+      if (it_start == m_cursors.end()) {
+        auto range = m_smart->newMovingRange(m_range);
+        range->setAttribute(m_attr);
+        m_cursors.emplace_back(range);
+      }
+      else if (it_start == it_end) {
+        if (it_start->start() == m_range.end()) {
+          it_start->setRange(KTextEditor::Range(
+            m_range.start(), it_start->end()));
+        }
+        else {
+          auto range = m_smart->newMovingRange(m_range);
+          range->setAttribute(m_attr);
+          m_cursors.emplace(it_start, range);
+        }
+      }
+      else {
+        it_start->setRange(KTextEditor::Range(
+          std::min(it_start->start().toCursor(), m_range.start()),
+          std::max((it_end-1)->end().toCursor(), m_range.end())
+        ));
+        m_cursors.erase(++it_start, it_end);
+      }
+      //@}
+
+      for (auto & c : m_cursors) {
+        qDebug() << c.start() << ' ' << c.end();
+      }
+      qDebug() << "------------";
     }
     m_range = m_range.invalid();
   }

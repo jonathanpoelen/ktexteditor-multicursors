@@ -134,8 +134,14 @@ private:
 		KTextEditor::Attribute::Ptr attribute()
 		{ return m_range->attribute(); }
 
-		const KTextEditor::MovingCursor& cursor() const
-		{ return m_range->start(); }
+    const KTextEditor::MovingCursor& cursor() const
+    { return m_range->start(); }
+
+    // TODO
+    const KTextEditor::MovingCursor& start() const
+    { return m_range->start(); }
+		const KTextEditor::MovingCursor& end() const
+		{ return m_range->end(); }
 
 		int line() const
 		{ return cursor().line(); }
@@ -146,8 +152,11 @@ private:
 		void setCursor(const KTextEditor::Cursor& cursor)
 		{ m_range->setRange(KTextEditor::Range(cursor, cursor.line(), cursor.column()+1)); }
 
-		void setCursor(int line, int column)
-		{ m_range->setRange(KTextEditor::Range(line, column, line, column+1)); }
+    void setCursor(int line, int column)
+    { m_range->setRange(KTextEditor::Range(line, column, line, column+1)); }
+
+		void setRange(const KTextEditor::Range & range)
+		{ m_range->setRange(range); }
 
 		bool operator==(const KTextEditor::Cursor& cursor) const
 		{ return this->cursor() == cursor; }
