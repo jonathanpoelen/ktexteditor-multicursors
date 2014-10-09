@@ -105,6 +105,9 @@ private:
     void setRange(const KTextEditor::Cursor & c1, const KTextEditor::Cursor & c2)
 		{ m_range->setRange(KTextEditor::Range(c1, c2)); }
 
+    const KTextEditor::Range toRange() const
+    { return m_range->toRange(); }
+
 	private:
 		std::unique_ptr<KTextEditor::MovingRange> m_range;
 	};
@@ -122,33 +125,58 @@ private slots:
 	void textDelete();
 
 	void setCursor();
-	void removeLine();
+	void removeCursorsOnLine();
+  void removeAllCursors();
 
-	void moveNext();
-	void movePrev();
+	void moveToNextCursor();
+  void moveToPreviousCursor();
 
-	void setActive();
+  void setActiveCursor();
 
-	void setSynchronize();
+  void setSynchronizedCursors();
 	void cursorPositionChanged(KTextEditor::View*, const KTextEditor::Cursor&);
-  void selectionChanged (KTextEditor::View*);
+  void selectionChanged(KTextEditor::View*);
 
-  void removeAll();
+  void extendLeftSelection();
+  void extendRightSelection();
+
+  void setRange();
+  void removeAllRanges();
+  void removeRangesOnline();
+  void clearRanges();
+
+  void cutRanges();
+  void copyRanges();
+  void pasteRanges();
+
+  void moveToNextStartRange();
+  void moveToPreviousStartRange();
+  void moveToNextEndRange();
+  void moveToPreviousEndRange();
 
 // private:
 //    void debug() const;
 
-protected:
+private:
 	bool endEditing();
 	bool startEditing();
 	void insertText(const QString &text);
 
 	void removeRange(const CursorList::iterator& it);
-	void connectCurses();
-	void disconnectCurses();
-	void actionEmptyCurses();
-	void actionStartCurses();
-	void setEnabled(bool);
+
+  void connectCursors();
+  void disconnectCursors();
+  void startCursors();
+  void stopCursors();
+  void checkCursors();
+  void setEnabledCursors(bool);
+
+  void connectRanges();
+  void disconnectRanges();
+  void startRanges();
+  void stopRanges();
+  void checkRanges();
+  void setEnabledRanges(bool);
 
   bool eventFilter(QObject *obj, QEvent *ev);
 
@@ -165,7 +193,7 @@ private:
 	KTextEditor::MovingInterface *m_smart;
 	bool m_text_edit;
 	bool m_active;
-	bool m_synchronize;
+  bool m_synchronize_cursor;
 	bool m_remove_cursor_if_only_click;
 	KTextEditor::Cursor m_cursor;
   CursorList m_cursors;

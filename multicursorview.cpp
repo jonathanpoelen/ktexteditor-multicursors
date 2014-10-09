@@ -31,6 +31,7 @@
 
 #include <QMenu>
 #include <QApplication>
+#include <QClipboard>
 #include <KConfigGroup>
 
 template<class Cont, class T>
@@ -189,7 +190,7 @@ MultiCursorView::MultiCursorView(KTextEditor::View *view, KTextEditor::Attribute
 , m_smart(qobject_cast<KTextEditor::MovingInterface*>(m_document))
 , m_text_edit(false)
 , m_active(true)
-, m_synchronize(false)
+, m_synchronize_cursor(false)
 , m_remove_cursor_if_only_click(false)
 , m_cursor()
 , m_attr(attr)
@@ -207,58 +208,92 @@ MultiCursorView::MultiCursorView(KTextEditor::View *view, KTextEditor::Attribute
 	/*ENTRY("info cursors", "info_multicursor", debug());
 	action->setShortcut(Qt::CTRL + Qt::ALT + Qt::Key_I);*/
 
-	ENTRY("Set MultiCursor", "set_multicursor", setCursor());
+	ENTRY("Set Virtual Cursor", "set_multicursor", setCursor());
 	action->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_C);
 
-	ENTRY("Backspace Character for MultiCursor", "backspace_multicursor", textBackspace());
+  ENTRY("Backspace Character on Virtuals Cursors", "backspace_multicursor", textBackspace());
 	action->setShortcut(Qt::ALT + Qt::Key_Backspace);
 
-	ENTRY("Delete Character for MultiCursor", "del_multicursor", textDelete());
+  ENTRY("Delete Character on Virtuals Cursors", "delete_multicursor", textDelete());
 	action->setShortcut(Qt::ALT + Qt::Key_Delete);
 
-	ENTRY("Remove all MultiCursor", "remove_all_multicursor", removeAll());
+  ENTRY("Remove All Virtuals Cursors", "remove_all_multicursor", removeAllCursors());
 	action->setShortcut(Qt::ALT + Qt::SHIFT + Qt::Key_Delete);
 
-	ENTRY("Remove line MultiCursor", "remove_line_multicursor", removeLine());
+  ENTRY("Remove Virtuals Cursors Line", "remove_line_multicursor", removeCursorsOnLine());
 	action->setShortcut(Qt::CTRL + Qt::ALT +  Qt::Key_Delete);
 
-	ENTRY("Move next MultiCursor", "move_next_multicursor", moveNext());
+	ENTRY("Move to Next Virtual Cursor", "next_multicursor", moveToNextCursor());
 	action->setShortcut(Qt::CTRL + Qt::ALT + Qt::Key_H);
 
-	ENTRY("Move prev MultiCursor", "move_prev_multicursor", movePrev());
+  ENTRY("Move to Previous Virtual Cursor", "previous_multicursor", moveToPreviousCursor());
 	action->setShortcut(Qt::CTRL + Qt::ALT + Qt::SHIFT + Qt::Key_H);
 
-	ENTRY("Set active MultiCursor", "active_multicursor", setActive())
+  ENTRY("Enable Virtuals Cursors", "active_multicursor", setActiveCursor())
 	action->setCheckable(true);
 	action->setChecked(true);
 
-	ENTRY("Synchronize with the current cursor", "synchronise_multicursor", setSynchronize());
-	action->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_P);
-	action->setCheckable(true);
+  ENTRY("Synchronize With the Blinking Cursor", "synchronise_multicursor", setSynchronizedCursors());
+  action->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_P);
+  action->setCheckable(true);
+
+  ENTRY("Extend the Selection to Left", "extend_left_selection", extendLeftSelection());
+  action->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_ParenLeft);
+  action->setCheckable(true);
+
+  ENTRY("Extend the Selection to Right", "extend_right_selection", extendRightSelection());
+  action->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_ParenRight);
+
+
+  ENTRY("Set Virtual Selection", "set_multiselection", setRange());
+  action->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_R);
+
+  ENTRY("Remove All Virtuals Selections", "remove_all_multiselection", removeAllRanges());
+  action->setShortcut(Qt::CTRL + Qt::Key_Underscore);
+
+  ENTRY("Remove Virtuals Selections Line", "remove_line_multiselection", removeRangesOnline());
+
+  ENTRY("Clear Virtuals Selections", "clear_multiselection", clearRanges());
+  action->setShortcut(Qt::ALT + Qt::Key_Escape);
+
+  ENTRY("Cut Virtuals Selections", "cut_multiselection", cutRanges());
+  action->setShortcut(Qt::CTRL + Qt::ALT + Qt::Key_X);
+
+  ENTRY("Copy Virtuals Selections", "copy_multiselection", copyRanges());
+  action->setShortcut(Qt::CTRL + Qt::ALT + Qt::Key_C);
+
+  ENTRY("Paste Virtuals Selections", "paste_multiselection", pasteRanges());
+  action->setShortcut(Qt::CTRL + Qt::ALT + Qt::Key_V);
+
+  ENTRY("Move to Next Virtual Selection Start", "next_start_multiselection", moveToNextStartRange());
+
+  ENTRY("Move to Previous Virtual Selection Start", "previous_start_multiselection", moveToPreviousStartRange());
+
+  ENTRY("Move to Next Virtual Selection End", "next_end_multiselection", moveToNextEndRange());
+
+  ENTRY("Move to Previous Virtual Selection End", "previous_end_multiselection", moveToPreviousEndRange());
 
 #undef ENTRY
 
-	setEnabled(false);
+  setEnabledCursors(false);
+	setEnabledRanges(false);
 	setXMLFile("multicursorui.rc");
 
-
 	// TODO
-    connect(m_view, SIGNAL(selectionChanged(KTextEditor::View*)), this, SLOT(selectionChanged(KTextEditor::View*)));
-    m_view->focusProxy()->installEventFilter(this);
+//   connect(m_view, SIGNAL(selectionChanged(KTextEditor::View*)), this, SLOT(selectionChanged(KTextEditor::View*)));
+
 }
 
 MultiCursorView::~MultiCursorView()
 {}
 
-void MultiCursorView::exclusiveEditStart(KTextEditor::Document *doc)
+void MultiCursorView::exclusiveEditStart(KTextEditor::Document *)
 {
-	Q_UNUSED(doc);
 	m_text_edit = true;
 }
 
-void MultiCursorView::exclusiveEditEnd(KTextEditor::Document *doc)
+void MultiCursorView::exclusiveEditEnd(KTextEditor::Document *)
 {
-	Q_UNUSED(doc);
 	m_text_edit = false;
 }
 
@@ -281,75 +316,156 @@ void MultiCursorView::textDelete()
   }
 }
 
-#define MSIGNAL_OBJECT(O, F, P) F(O, SIGNAL(P), this, SLOT(P))
-#define MSIGNAL(F, P) MSIGNAL_OBJECT(m_document, F, P)
+#define SIGNALMAN_OBJECT(O, F, P) F(O, SIGNAL(P), this, SLOT(P))
+#define SIGNALMAN_DOC(F, P) SIGNALMAN_OBJECT(m_document, F, P)
 
-#define MSIGNALCURSES(F)\
-	do { \
-		MSIGNAL(F, textRemoved(KTextEditor::Document*,KTextEditor::Range,QString));\
-		MSIGNAL(F, textInserted(KTextEditor::Document*,KTextEditor::Range));\
-		MSIGNAL(F, exclusiveEditStart(KTextEditor::Document*));\
-		MSIGNAL(F, exclusiveEditEnd(KTextEditor::Document*));\
-	} while (0)
+#define SIGNALMAN_CHECK_VAR m_ranges
+#define SIGNALMAN_CHECK(F) SIGNALMAN_CHECK_##F
+#define SIGNALMAN_CHECK_connect SIGNALMAN_CHECK_VAR.empty()
+#define SIGNALMAN_CHECK_disconnect !SIGNALMAN_CHECK_VAR.empty()
 
-#define MSIGNALCURSES_SYNCHRONISE(F)\
-	MSIGNAL_OBJECT(m_view, F, cursorPositionChanged(KTextEditor::View*,KTextEditor::Cursor))
+#define SIGNALMAN_CURSORS(F)\
+  do { \
+    SIGNALMAN_DOC(F, textRemoved(KTextEditor::Document*,KTextEditor::Range,QString));\
+    SIGNALMAN_DOC(F, textInserted(KTextEditor::Document*,KTextEditor::Range));\
+    if (SIGNALMAN_CHECK(F)) {\
+      SIGNALMAN_DOC(F, exclusiveEditStart(KTextEditor::Document*));\
+      SIGNALMAN_DOC(F, exclusiveEditEnd(KTextEditor::Document*));\
+    }\
+  } while (0)
 
-void MultiCursorView::connectCurses()
+#define SIGNALMAN_CURSORS_SYNCHRONISE(F)\
+  SIGNALMAN_OBJECT(m_view, F, cursorPositionChanged(KTextEditor::View*,KTextEditor::Cursor))
+
+void MultiCursorView::connectCursors()
 {
-	MSIGNALCURSES(connect);
-	if (m_synchronize) {
-		MSIGNALCURSES_SYNCHRONISE(connect);
-	}
+  SIGNALMAN_CURSORS(connect);
+  if (m_synchronize_cursor) {
+    SIGNALMAN_CURSORS_SYNCHRONISE(connect);
+  }
 }
 
-void MultiCursorView::disconnectCurses()
+void MultiCursorView::disconnectCursors()
 {
-	MSIGNALCURSES(disconnect);
-	if (m_synchronize) {
-		MSIGNALCURSES_SYNCHRONISE(disconnect);
-	}
+  SIGNALMAN_CURSORS(disconnect);
+  if (m_synchronize_cursor) {
+    SIGNALMAN_CURSORS_SYNCHRONISE(disconnect);
+  }
 }
 
-#undef MSIGNALCURSES
+#undef SIGNALMAN_CURSORS
+#undef SIGNALMAN_CHECK_VAR
 
-void MultiCursorView::setSynchronize()
+void MultiCursorView::setSynchronizedCursors()
 {
-	if (m_synchronize) {
-		m_synchronize = false;
-		MSIGNALCURSES_SYNCHRONISE(disconnect);
-	} else {
-		m_synchronize = true;
-		m_cursor = m_view->cursorPosition();
-		MSIGNALCURSES_SYNCHRONISE(connect);
-	}
+  if (m_synchronize_cursor) {
+    m_synchronize_cursor = false;
+    SIGNALMAN_CURSORS_SYNCHRONISE(disconnect);
+  } else {
+    m_synchronize_cursor = true;
+    m_cursor = m_view->cursorPosition();
+    SIGNALMAN_CURSORS_SYNCHRONISE(connect);
+  }
 }
 
-#undef MSIGNALCURSES_SYNCHRONISE
-#undef MSIGNAL
-#undef MSIGNAL_OBJECT
+#undef SIGNALMAN_CURSORS_SYNCHRONISE
 
-void MultiCursorView::actionEmptyCurses()
+#define SIGNALMAN_OBJECT(O, F, P) F(O, SIGNAL(P), this, SLOT(P))
+#define SIGNALMAN_DOC(F, P) SIGNALMAN_OBJECT(m_document, F, P)
+
+#define SIGNALMAN_CHECK_VAR m_cursors
+
+#define SIGNALMAN_RANGES(F)\
+  do { \
+    if (SIGNALMAN_CHECK(F)) {\
+      SIGNALMAN_DOC(F, exclusiveEditStart(KTextEditor::Document*));\
+      SIGNALMAN_DOC(F, exclusiveEditEnd(KTextEditor::Document*));\
+    }\
+  } while (0)
+
+void MultiCursorView::connectRanges()
 {
-	disconnectCurses();
-	setEnabled(false);
+  SIGNALMAN_RANGES(connect);
 }
 
-void MultiCursorView::actionStartCurses()
+void MultiCursorView::disconnectRanges()
 {
-	connectCurses();
-	setEnabled(true);
+  SIGNALMAN_RANGES(disconnect);
 }
 
-void MultiCursorView::setEnabled(bool x)
+#undef SIGNALMAN_RANGES
+#undef SIGNALMAN_CHECK
+#undef SIGNALMAN_CHECK_connect
+#undef SIGNALMAN_CHECK_disconnect
+#undef SIGNALMAN_CHECK_VAR
+#undef SIGNALMAN_OBJECT
+#undef SIGNALMAN_DOC
+
+void MultiCursorView::stopCursors()
 {
-	KActionCollection * collec = actionCollection();
-	collec->action("backspace_multicursor")->setEnabled(x);
-	collec->action("remove_all_multicursor")->setEnabled(x);
-	collec->action("remove_line_multicursor")->setEnabled(x);
-	collec->action("move_next_multicursor")->setEnabled(x);
-	collec->action("move_prev_multicursor")->setEnabled(x);
-	collec->action("synchronise_multicursor")->setEnabled(x);
+  disconnectCursors();
+  setEnabledCursors(false);
+}
+
+void MultiCursorView::startCursors()
+{
+  connectCursors();
+  setEnabledCursors(true);
+}
+
+void MultiCursorView::checkCursors()
+{
+  if (m_cursors.empty()) {
+    stopCursors();
+  }
+}
+
+void MultiCursorView::stopRanges()
+{
+  disconnectRanges();
+  setEnabledRanges(false);
+}
+
+void MultiCursorView::startRanges()
+{
+  connectRanges();
+  setEnabledRanges(true);
+}
+
+void MultiCursorView::checkRanges()
+{
+  if (m_ranges.empty()) {
+    stopRanges();
+  }
+}
+
+void MultiCursorView::setEnabledRanges(bool x)
+{
+  KActionCollection * collec = actionCollection();
+  collec->action("remove_all_multiselection")->setEnabled(x);
+  collec->action("remove_line_multiselection")->setEnabled(x);
+  collec->action("clear_multiselection")->setEnabled(x);
+  collec->action("copy_multiselection")->setEnabled(x);
+  collec->action("cut_multiselection")->setEnabled(x);
+  collec->action("paste_multiselection")->setEnabled(x);
+  collec->action("next_start_multiselection")->setEnabled(x);
+  collec->action("previous_start_multiselection")->setEnabled(x);
+  collec->action("next_end_multiselection")->setEnabled(x);
+  collec->action("previous_end_multiselection")->setEnabled(x);
+}
+
+void MultiCursorView::setEnabledCursors(bool x)
+{
+  KActionCollection * collec = actionCollection();
+  collec->action("backspace_multicursor")->setEnabled(x);
+  collec->action("delete_multicursor")->setEnabled(x);
+  collec->action("remove_all_multicursor")->setEnabled(x);
+  collec->action("remove_line_multicursor")->setEnabled(x);
+  collec->action("next_multicursor")->setEnabled(x);
+  collec->action("previous_multicursor")->setEnabled(x);
+  collec->action("synchronise_multicursor")->setEnabled(x);
+  collec->action("extend_left_selection")->setEnabled(x);
+  collec->action("extend_right_selection")->setEnabled(x);
 }
 
 void MultiCursorView::cursorPositionChanged(KTextEditor::View*, const KTextEditor::Cursor& cursor)
@@ -430,8 +546,7 @@ void MultiCursorView::cursorPositionChanged(KTextEditor::View*, const KTextEdito
 		m_cursors.erase(first, last);
 	}
 
-	if (m_cursors.empty())
-		actionEmptyCurses();
+	checkCursors();
 }
 
 // TODO
@@ -439,6 +554,7 @@ KTextEditor::Range m_range;
 // only if multi-selection mode (and with mouse ?)
 void MultiCursorView::selectionChanged(KTextEditor::View*)
 {
+  // only if ctrl
   if (m_view->selection()) {
     m_range = m_view->selectionRange();
   }
@@ -468,7 +584,7 @@ void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
 
     if (m_cursors.empty()) {
       m_cursors.emplace_back(range);
-      actionStartCurses();
+      startCursors();
     }
     else {
       m_cursors.emplace(it, range);
@@ -478,6 +594,12 @@ void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
 
 void MultiCursorView::setRange(const KTextEditor::Range& range)
 {
+  if (m_ranges.empty()) {
+    startRanges();
+  }
+
+  // TODO block mode
+
   auto it_start = lowerBound(m_ranges, range.start()
   , [](Range const & c1, KTextEditor::Cursor const & c2){
       return c1.end() < c2;
@@ -488,6 +610,7 @@ void MultiCursorView::setRange(const KTextEditor::Range& range)
       return c1.start() < c2;
     }
   );
+
   if (it_start == m_ranges.end()) {
     auto moving_range = m_smart->newMovingRange(range);
     moving_range->setAttribute(m_attr);
@@ -543,7 +666,7 @@ bool MultiCursorView::eventFilter(QObject* obj, QEvent* event)
             return false;
         }
         else if (m_remove_cursor_if_only_click) {
-            removeAll();
+            removeAllCursors();
             return false;
         }
     }
@@ -591,6 +714,7 @@ void MultiCursorView::textRemoved(
 {
   Q_UNUSED(doc);
   Q_UNUSED(range);
+  // TODO block selection
   if (startEditing()) {
     CursorListDetail::removeBackwardText(
       m_document, m_cursors, text.length(),
@@ -605,11 +729,10 @@ void MultiCursorView::textRemoved(
 void MultiCursorView::removeRange(const CursorList::iterator &it)
 {
 	m_cursors.erase(it);
-	if (m_cursors.empty())
-		actionEmptyCurses();
+  checkCursors();
 }
 
-void MultiCursorView::removeAll()
+void MultiCursorView::removeAllCursors()
 {
   if (m_view->selection()) {
     const KTextEditor::Range& range = m_view->selectionRange();
@@ -617,15 +740,15 @@ void MultiCursorView::removeAll()
     auto last = std::upper_bound(first, m_cursors.end(), range.start());
     m_cursors.erase(first, last);
     if (m_cursors.empty()) {
-      actionEmptyCurses();
+      stopCursors();
     }
   } else {
     m_cursors.clear();
-    actionEmptyCurses();
+    stopCursors();
   }
 }
 
-void MultiCursorView::removeLine()
+void MultiCursorView::removeCursorsOnLine()
 {
   const int line = m_view->cursorPosition().line();
   auto first = lowerBound(m_cursors, line
@@ -635,11 +758,11 @@ void MultiCursorView::removeLine()
   , [](int line, Cursor const & c) { return c.line() != line; });
   m_cursors.erase(first, last);
   if (m_cursors.empty()) {
-    actionEmptyCurses();
+    stopCursors();
   }
 }
 
-void MultiCursorView::moveNext()
+void MultiCursorView::moveToNextCursor()
 {
   auto it = lowerBound(m_cursors, m_view->cursorPosition()
   , [](Cursor const & c1, KTextEditor::Cursor const & c2) {
@@ -649,29 +772,115 @@ void MultiCursorView::moveNext()
     it != m_cursors.end() ? it->cursor() : m_cursors.front().cursor());
 }
 
-void MultiCursorView::movePrev()
+void MultiCursorView::moveToPreviousCursor()
 {
   auto it = lowerBound(m_cursors, m_view->cursorPosition());
   m_view->setCursorPosition(
     it != m_cursors.begin() ? (--it)->cursor() : m_cursors.back().cursor());
 }
 
-void MultiCursorView::setActive()
+void MultiCursorView::setActiveCursor()
 {
 	if (m_active) {
 		m_active = false;
-		disconnectCurses();
+		disconnectCursors();
 	} else {
 		m_active = true;
-		connectCurses();
+		connectCursors();
 	}
+}
+
+void MultiCursorView::clearRanges()
+{
+  std::for_each(m_ranges.rbegin(), m_ranges.rend()
+  , [this](Range const & r){ m_document->removeText(r.toRange()); });
+  removeAllRanges();
+}
+
+void MultiCursorView::copyRanges()
+{
+  // TODO block mode
+  int l = m_ranges.front().end().line();
+  QString s;
+  for (Range & r : m_ranges) {
+    const KTextEditor::Range range = r.toRange();
+    s.append(range.start().line() != l ? '\n' : ' ');
+    l = range.end().line();
+    s.append(m_document->text(range));
+  }
+  QApplication::clipboard()->setText(s);
+}
+
+void MultiCursorView::cutRanges()
+{
+  copyRanges();
+  clearRanges();
+}
+
+void MultiCursorView::pasteRanges()
+{
+  const QString text = QApplication::clipboard()->text();
+  std::for_each(m_ranges.rbegin(), m_ranges.rend()
+  , [this, &text](Range const & r){
+    KTextEditor::Range range = r.toRange();
+    m_document->insertText(r.end(), text);
+    m_document->removeText(range);
+  });
+}
+
+void MultiCursorView::setRange()
+{
+  if (m_view->selection()) {
+    setRange(m_view->selectionRange());
+  }
+}
+
+void MultiCursorView::extendLeftSelection()
+{
+  // TODO
+}
+
+void MultiCursorView::extendRightSelection()
+{
+  // TODO
+}
+
+void MultiCursorView::moveToNextEndRange()
+{
+// TODO
+}
+
+void MultiCursorView::moveToNextStartRange()
+{
+// TODO
+}
+
+void MultiCursorView::moveToPreviousEndRange()
+{
+// TODO
+}
+
+void MultiCursorView::moveToPreviousStartRange()
+{
+// TODO
+}
+
+void MultiCursorView::removeAllRanges()
+{
+  m_ranges.clear();
+  stopRanges();
+}
+
+void MultiCursorView::removeRangesOnline()
+{
+// TODO
 }
 
 bool MultiCursorView::startEditing()
 {
 	if (!m_active || m_text_edit || !m_document->startEditing())
 		return false;
-	if (m_synchronize)
+	if (m_synchronize_cursor)
 		actionCollection()->action("synchronise_multicursor")->trigger();
 	return m_text_edit = true;
 }
