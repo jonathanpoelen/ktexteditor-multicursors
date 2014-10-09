@@ -15,97 +15,31 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef MULTICURSOR_H
-#define MULTICURSOR_H
+#ifndef MULTICURSOR_VIEW_H
+#define MULTICURSOR_VIEW_H
 
 #include <vector>
 #include <memory>
 
 #include <QObject>
-#include <QColor>
-#include <QTextFormat>
 
 #include <KXMLGUIClient>
-#include <KTextEditor/Plugin>
-#include <KTextEditor/Cursor>
-#include <KTextEditor/Range>
-#include <KTextEditor/MovingCursor>
+#include <KTextEditor/Attribute>
+
+// #include <KTextEditor/Cursor>
+// #include <KTextEditor/Range>
+// #include <KTextEditor/MovingCursor>
 #include <KTextEditor/MovingRange>
 
 namespace KTextEditor
 {
 	class View;
 	class Document;
+  class MovingRange;
 	class MovingInterface;
 }
 
 class MultiCursorView;
-
-
-class MultiCursorPlugin
-: public KTextEditor::Plugin
-{
-public:
-	struct DefaultValues {
-		QColor cursorColor;
-		int underlineStyle;
-		QColor underlineColor;
-		bool activeCtrlClick;
-		bool removeCursorIfOnlyClick;
-
-		DefaultValues()
-		: cursorColor(0,0,0,40)
-		, underlineStyle(1)
-		, underlineColor(Qt::red)
-		, activeCtrlClick(true)
-		, removeCursorIfOnlyClick(false)
-		{}
-	};
-
-public:
-	explicit MultiCursorPlugin(QObject *parent = 0, const QVariantList &args = QVariantList());
-	virtual ~MultiCursorPlugin();
-
-	static MultiCursorPlugin* self()
-	{ return plugin; }
-
-	void addView (KTextEditor::View *view);
-	void removeView (KTextEditor::View *view);
-
-	void readConfig();
-	void writeConfig();
-
-	virtual void readConfig (KConfig *)
-	{};
-	virtual void writeConfig (KConfig *)
-	{};
-
-	void setCursorBrush(const QBrush& brush)
-	{ m_attr->setBackground(brush); }
-	void setUnderlineStyle(QTextCharFormat::UnderlineStyle style)
-	{ m_attr->setUnderlineStyle(style); }
-	void setUnderlineColor(const QColor& color)
-	{ m_attr->setUnderlineColor(color); }
-  void setActiveCtrlClick(bool active, bool remove_cursor_if_only_click);
-
-	QBrush cursorBrush() const
-	{ return m_attr->background(); }
-	QTextCharFormat::UnderlineStyle underlineStyle() const
-	{ return m_attr->underlineStyle(); }
-	QColor underlineColor() const
-	{ return m_attr->underlineColor(); }
-  bool activeCtrlClick() const
-  { return m_active_ctrl_click; }
-	bool activeRemovedCursorIfOnlyClick() const
-	{ return m_remove_cursor_if_only_click; }
-
-private:
-	static MultiCursorPlugin *plugin;
-	QList<MultiCursorView*> m_views;
-	KTextEditor::Attribute::Ptr m_attr;
-	bool m_remove_cursor_if_only_click;
-	bool m_active_ctrl_click;
-};
 
 
 class MultiCursorView
@@ -155,8 +89,8 @@ private:
     void setCursor(int line, int column)
     { m_range->setRange(KTextEditor::Range(line, column, line, column+1)); }
 
-		void setRange(const KTextEditor::Range & range)
-		{ m_range->setRange(range); }
+    void setRange(const KTextEditor::Cursor & c1, const KTextEditor::Cursor & c2)
+		{ m_range->setRange(KTextEditor::Range(c1, c2)); }
 
 		bool operator==(const KTextEditor::Cursor& cursor) const
 		{ return this->cursor() == cursor; }
@@ -217,7 +151,8 @@ protected:
   bool eventFilter(QObject *obj, QEvent *ev);
 
 private:
-	void setCursor(const KTextEditor::Cursor& cursor);
+  void setCursor(const KTextEditor::Cursor& cursor);
+	void setRange(const KTextEditor::Range& range);
 
 public:
 	void setActiveCtrlClick(bool active, bool remove_cursor_if_only_click);
@@ -234,7 +169,5 @@ private:
 	CursorList m_cursors;
 	KTextEditor::Attribute::Ptr m_attr;
 };
-
-K_PLUGIN_FACTORY_DECLARATION(MultiCursorPluginFactory)
 
 #endif

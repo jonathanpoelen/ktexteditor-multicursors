@@ -15,19 +15,16 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "multicursor.h"
-#include "multicursorconfig.h"
+#include "multicursorview.h"
+#include "multicursorplugin.h"
 
 #include <functional>
 #include <algorithm>
 
-#include <KTextEditor/Document>
 #include <KTextEditor/View>
+#include <KTextEditor/Document>
 #include <KTextEditor/MovingInterface>
 
-#include <KPluginFactory>
-#include <KPluginLoader>
-#include <KLocale>
 #include <KAction>
 #include <KActionCollection>
 #include <KActionMenu>
@@ -35,87 +32,6 @@
 #include <QMenu>
 #include <QApplication>
 #include <KConfigGroup>
-
-MultiCursorPlugin *MultiCursorPlugin::plugin = 0;
-
-K_PLUGIN_FACTORY_DEFINITION(MultiCursorPluginFactory,
-	registerPlugin<MultiCursorPlugin>("ktexteditor_multicursor");
-	registerPlugin<MultiCursorConfig>("ktexteditor_multicursor_config");
-)
-K_EXPORT_PLUGIN(MultiCursorPluginFactory("ktexteditor_multicursor", "ktexteditor_plugins"))
-
-MultiCursorPlugin::MultiCursorPlugin(QObject *parent, const QVariantList &args)
-: KTextEditor::Plugin(parent)
-, m_views()
-, m_attr(new KTextEditor::Attribute)
-, m_remove_cursor_if_only_click(false)
-, m_active_ctrl_click(false)
-{
-	Q_UNUSED(args);
-	plugin = this;
-
-	readConfig();
-}
-
-MultiCursorPlugin::~MultiCursorPlugin()
-{
-	plugin = 0;
-}
-
-void MultiCursorPlugin::addView(KTextEditor::View *view)
-{
-    MultiCursorView *nview = new MultiCursorView(view, m_attr);
-    if (m_active_ctrl_click) {
-        nview->setActiveCtrlClick(true, m_remove_cursor_if_only_click);
-    }
-    m_views.append(nview);
-}
-
-void MultiCursorPlugin::removeView(KTextEditor::View *view)
-{
-	for (int z = 0; z < m_views.size(); z++) {
-		if (m_views.at(z)->parentClient() == view) {
-			MultiCursorView *nview = m_views.at(z);
-			m_views.removeAll(nview);
-			delete nview;
-		}
-    }
-    if (m_active_ctrl_click && m_views.empty()) {
-        QApplication::instance()->removeEventFilter(this);
-    }
-}
-
-void MultiCursorPlugin::readConfig()
-{
-	KConfigGroup cg(KGlobal::config(), "MultiCursor Plugin");
-	const DefaultValues values;
-	m_attr->setBackground(cg.readEntry("cursor_brush", values.cursorColor));
-	m_attr->setUnderlineColor(cg.readEntry("underline_color", values.underlineColor));
-	int line_style = cg.readEntry("underline_style", values.underlineStyle);
-	m_attr->setUnderlineStyle(QTextCharFormat::UnderlineStyle(line_style));
-    m_remove_cursor_if_only_click = cg.readEntry("remove_cursor_if_only_click", false);
-	m_active_ctrl_click = cg.readEntry("active_ctrl_click", true);
-}
-
-void MultiCursorPlugin::writeConfig()
-{
-	KConfigGroup cg(KGlobal::config(), "MultiCursor Plugin");
-	cg.writeEntry("cursor_brush", m_attr->background().color());
-	cg.writeEntry("underline_color", m_attr->underlineColor());
-    cg.writeEntry("underline_style", int(m_attr->underlineStyle()));
-    cg.writeEntry("remove_cursor_if_only_click", m_remove_cursor_if_only_click);
-	cg.writeEntry("active_ctrl_click", m_active_ctrl_click);
-}
-
-void MultiCursorPlugin::setActiveCtrlClick(bool active, bool remove_cursor_if_only_click)
-{
-    m_active_ctrl_click = active;
-    m_remove_cursor_if_only_click = remove_cursor_if_only_click;
-    for (MultiCursorView * v: m_views) {
-        v->setActiveCtrlClick(active, remove_cursor_if_only_click);
-    }
-}
-
 
 struct MultiCursorView::CursorListDetail
 {
@@ -317,6 +233,7 @@ MultiCursorView::MultiCursorView(KTextEditor::View *view, KTextEditor::Attribute
 
 	// TODO
     connect(m_view, SIGNAL(selectionChanged(KTextEditor::View*)), this, SLOT(selectionChanged(KTextEditor::View*)));
+    m_view->focusProxy()->installEventFilter(this);
 }
 
 MultiCursorView::~MultiCursorView()
@@ -517,39 +434,7 @@ void MultiCursorView::selectionChanged(KTextEditor::View*)
   }
   else {
     if (m_range.isValid()) {
-      // TODO addSelection(const KTextEditor::Range &)
-      //@{
-      auto it_start = std::lower_bound(
-        m_cursors.begin(), m_cursors.end(), m_range.start(),
-        [](Cursor const & c1, KTextEditor::Cursor const & c2){
-          return c1.end() < c2;
-        }
-      );
-      auto it_end = std::lower_bound(it_start, m_cursors.end(), m_range.end());
-      if (it_start == m_cursors.end()) {
-        auto range = m_smart->newMovingRange(m_range);
-        range->setAttribute(m_attr);
-        m_cursors.emplace_back(range);
-      }
-      else if (it_start == it_end) {
-        if (it_start->start() == m_range.end()) {
-          it_start->setRange(KTextEditor::Range(
-            m_range.start(), it_start->end()));
-        }
-        else {
-          auto range = m_smart->newMovingRange(m_range);
-          range->setAttribute(m_attr);
-          m_cursors.emplace(it_start, range);
-        }
-      }
-      else {
-        it_start->setRange(KTextEditor::Range(
-          std::min(it_start->start().toCursor(), m_range.start()),
-          std::max((it_end-1)->end().toCursor(), m_range.end())
-        ));
-        m_cursors.erase(++it_start, it_end);
-      }
-      //@}
+      setRange(m_range);
 
       for (auto & c : m_cursors) {
         qDebug() << c.start() << ' ' << c.end();
@@ -579,6 +464,39 @@ void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
     else {
       m_cursors.emplace(it, range);
     }
+  }
+}
+
+void MultiCursorView::setRange(const KTextEditor::Range& range)
+{
+  auto it_start = std::lower_bound(
+    m_cursors.begin(), m_cursors.end(), range.start(),
+    [](Cursor const & c1, KTextEditor::Cursor const & c2){
+      return c1.end() < c2;
+    }
+  );
+  auto it_end = std::lower_bound(it_start, m_cursors.end(), range.end());
+  if (it_start == m_cursors.end()) {
+    auto moving_range = m_smart->newMovingRange(range);
+    moving_range->setAttribute(m_attr);
+    m_cursors.emplace_back(moving_range);
+  }
+  else if (it_start == it_end) {
+    if (it_start->start() == range.end()) {
+      it_start->setRange(range.start(), it_start->end());
+    }
+    else {
+      auto moving_range = m_smart->newMovingRange(range);
+      moving_range->setAttribute(m_attr);
+      m_cursors.emplace(it_start, moving_range);
+    }
+  }
+  else {
+    it_start->setRange(
+      std::min(it_start->start().toCursor(), range.start()),
+      std::max((it_end-1)->end().toCursor(), range.end())
+    );
+    m_cursors.erase(++it_start, it_end);
   }
 }
 
@@ -757,4 +675,4 @@ bool MultiCursorView::endEditing()
 	return m_document->endEditing();
 }
 
-#include "multicursor.moc"
+#include "multicursorview.moc"

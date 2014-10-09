@@ -16,7 +16,7 @@
 */
 
 #include "multicursorconfig.h"
-#include "multicursor.h"
+#include "multicursorplugin.h"
 
 #include <KLocale>
 #include <KPluginFactory>

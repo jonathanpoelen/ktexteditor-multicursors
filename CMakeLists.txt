@@ -7,7 +7,12 @@ include(KDE4Defaults)
 include_directories(${KDE4_INCLUDES} ${QT_INCLUDES})
 add_definitions(${QT_DEFINITIONS} ${KDE4_DEFINITIONS})
 
-set(ktexteditor_multicursor_SRCS multicursorconfig.cpp multicursor.cpp)
+set(
+  ktexteditor_multicursor_SRCS
+  multicursorconfig.cpp
+  multicursorplugin.cpp
+  multicursorview.cpp
+)
 
 kde4_add_plugin(ktexteditor_multicursor ${ktexteditor_multicursor_SRCS})
 
