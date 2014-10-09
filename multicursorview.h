@@ -54,61 +54,63 @@ public:
 	~MultiCursorView();
 
 private:
-	class Cursor
-	{
-	public:
-		Cursor(KTextEditor::MovingRange * range) noexcept
-		: m_range(range)
-		{}
-
-		Cursor(Cursor && other) = default;
-		Cursor& operator=(Cursor && other) = default;
-		Cursor& operator=(Cursor const & other) = delete;
-
-		KTextEditor::Attribute::Ptr attribute()
-		{ return m_range->attribute(); }
+  struct Cursor
+  {
+    Cursor(KTextEditor::MovingRange * range) noexcept
+    : m_range(range)
+    {}
 
     const KTextEditor::MovingCursor& cursor() const
     { return m_range->start(); }
 
-    // TODO
+    int line() const
+    { return cursor().line(); }
+
+    int column() const
+    { return cursor().column(); }
+
+    void setCursor(const KTextEditor::Cursor& cursor)
+    { m_range->setRange(KTextEditor::Range(cursor, cursor.line(), cursor.column()+1)); }
+
+    void setCursor(int line, int column)
+    { m_range->setRange(KTextEditor::Range(line, column, line, column+1)); }
+
+    bool operator==(const KTextEditor::Cursor& cursor) const
+    { return this->cursor() == cursor; }
+
+    bool operator<(const KTextEditor::Cursor& cursor) const
+    { return this->cursor() < cursor; }
+
+    friend bool operator<(const KTextEditor::Cursor& c1, const Cursor & c2)
+    { return c1 < c2.cursor(); }
+
+    void revalid()
+    { setCursor(line(), column()); }
+
+  private:
+    std::unique_ptr<KTextEditor::MovingRange> m_range;
+  };
+
+	struct Range
+	{
+		Range(KTextEditor::MovingRange * range) noexcept
+		: m_range(range)
+		{}
+
     const KTextEditor::MovingCursor& start() const
     { return m_range->start(); }
 		const KTextEditor::MovingCursor& end() const
 		{ return m_range->end(); }
 
-		int line() const
-		{ return cursor().line(); }
-
-		int column() const
-		{ return cursor().column(); }
-
-		void setCursor(const KTextEditor::Cursor& cursor)
-		{ m_range->setRange(KTextEditor::Range(cursor, cursor.line(), cursor.column()+1)); }
-
-    void setCursor(int line, int column)
-    { m_range->setRange(KTextEditor::Range(line, column, line, column+1)); }
-
     void setRange(const KTextEditor::Cursor & c1, const KTextEditor::Cursor & c2)
 		{ m_range->setRange(KTextEditor::Range(c1, c2)); }
-
-		bool operator==(const KTextEditor::Cursor& cursor) const
-		{ return this->cursor() == cursor; }
-
-		bool operator<(const KTextEditor::Cursor& cursor) const
-		{ return this->cursor() < cursor; }
-
-		friend bool operator<(const KTextEditor::Cursor& c1, const Cursor & c2)
-		{ return c1 < c2.cursor(); }
-
-		void revalid()
-		{ setCursor(line(), column()); }
 
 	private:
 		std::unique_ptr<KTextEditor::MovingRange> m_range;
 	};
 	///TODO boost::flat_set ?
-	typedef std::vector<Cursor> CursorList;
+  typedef std::vector<Cursor> CursorList;
+	typedef std::vector<Range> RangeList;
 
 private slots:
 	void exclusiveEditStart(KTextEditor::Document*);
@@ -166,7 +168,8 @@ private:
 	bool m_synchronize;
 	bool m_remove_cursor_if_only_click;
 	KTextEditor::Cursor m_cursor;
-	CursorList m_cursors;
+  CursorList m_cursors;
+	RangeList m_ranges;
 	KTextEditor::Attribute::Ptr m_attr;
 };
 
