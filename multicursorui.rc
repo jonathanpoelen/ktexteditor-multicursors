@@ -1,34 +1,43 @@
 <!DOCTYPE kpartgui>
-<kpartplugin name="ktexteditor_multicursor" library="ktexteditor_multicursor" version="5">
+<kpartplugin name="ktexteditor_multicursor" library="ktexteditor_multicursor" version="9">
 <MenuBar>
 	<Menu name="tools"><!--<Text>&amp;Tools</Text>-->
-		<separator group="tools_multicursor" />
+		<separator group="tools_multicursor"/>
 		<Action name="set_multicursor" group="tools_multicursor"/>
 		<Menu name="multicursor"><text>&amp;Virtuals Cursors</text>
       <Action name="backspace_multicursor" group="multicursor"/>
 			<Action name="delete_multicursor" group="multicursor"/>
-			<Action name="remove_all_multicursor" group="multicursor"/>
+      <separator group="tools_delete_char_multicursor"/>
+      <Action name="remove_all_multicursor" group="multicursor"/>
 			<Action name="remove_line_multicursor" group="multicursor"/>
-			<Action name="next_multicursor" group="multicursor"/>
+      <separator group="tools_delete_multicursor"/>
+      <Action name="next_multicursor" group="multicursor"/>
 			<Action name="previous_multicursor" group="multicursor"/>
-			<Action name="active_multicursor" group="multicursor"/>
-      <Action name="synchronise_multicursor" group="multicursor"/>
+      <separator group="tools_move_multicursor"/>
       <Action name="extend_left_selection" group="multicursor"/>
       <Action name="extend_right_selection" group="multicursor"/>
+      <Action name="reduce_left_selection" group="multicursor"/>
+      <Action name="reduce_right_selection" group="multicursor"/>
+      <separator group="tools_selection_multicursor"/>
+      <Action name="active_multicursor" group="multicursor"/>
+      <Action name="synchronise_multicursor" group="multicursor"/>
 		</Menu>
-    <separator group="tools_multiselection" />
+    <separator group="tools_multiselection"/>
     <Action name="set_multiselection" group="tools_multiselection"/>
     <Menu name="multiselection"><text>&amp;Virtuals Selections</text>
+      <Action name="clear_multiselection" group="multiselection"/>
+      <separator group="tools_delete_char_multiselection"/>
       <Action name="remove_all_multiselection" group="multiselection"/>
       <Action name="remove_line_multiselection" group="multiselection"/>
-      <Action name="clear_multiselection" group="multiselection"/>
-      <Action name="cut_multiselection" group="multiselection"/>
-      <Action name="copy_multiselection" group="multiselection"/>
-      <Action name="paste_multiselection" group="multiselection"/>
+      <separator group="tools_delete_multiselection"/>
       <Action name="next_start_multiselection" group="multiselection"/>
       <Action name="previous_start_multiselection" group="multiselection"/>
       <Action name="next_end_multiselection" group="multiselection"/>
       <Action name="previous_end_multiselection" group="multiselection"/>
+      <separator group="tools_move_multiselection"/>
+      <Action name="cut_multiselection" group="multiselection"/>
+      <Action name="copy_multiselection" group="multiselection"/>
+      <Action name="paste_multiselection" group="multiselection"/>
     </Menu>
   </Menu>
 </MenuBar>

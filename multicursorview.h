@@ -102,8 +102,14 @@ private:
 		const KTextEditor::MovingCursor& end() const
 		{ return m_range->end(); }
 
+    void setRange(const KTextEditor::Range & r)
+    { m_range->setRange(r); }
+
     void setRange(const KTextEditor::Cursor & c1, const KTextEditor::Cursor & c2)
-		{ m_range->setRange(KTextEditor::Range(c1, c2)); }
+		{ m_range->setRange(c1, c2); }
+
+    bool contains(const KTextEditor::Range & range) const
+    { return m_range->contains(range); }
 
     const KTextEditor::Range toRange() const
     { return m_range->toRange(); }
@@ -139,6 +145,8 @@ private slots:
 
   void extendLeftSelection();
   void extendRightSelection();
+  void reduceLeftSelection();
+  void reduceRightSelection();
 
   void setRange();
   void removeAllRanges();
