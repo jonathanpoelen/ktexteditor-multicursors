@@ -27,9 +27,7 @@
 
 #include <KAction>
 #include <KActionCollection>
-#include <KActionMenu>
 
-#include <QMenu>
 #include <QApplication>
 #include <QClipboard>
 #include <KConfigGroup>
@@ -223,6 +221,16 @@ struct MultiCursorView::CursorListDetail
     });
     view->setCursorPosition(
       it != cont.begin() ? cur(*--it) : cur(cont.back()));
+  }
+
+  static RangeList::iterator lowerBoundEnd(
+    RangeList & ranges, const KTextEditor::Cursor & cursor
+  ) {
+    return lowerBound(ranges, cursor
+    , [](Range const & r, KTextEditor::Cursor const & c) {
+        return r.end() < c;
+      }
+    );
   }
 };
 
@@ -643,31 +651,28 @@ void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
   }
 }
 
-void MultiCursorView::setRange(const KTextEditor::Range& range)
+void MultiCursorView::setRange(
+  const KTextEditor::Range& range, bool remove_if_contains)
 {
   if (m_ranges.empty()) {
     startRanges();
   }
 
-  // TODO block mode
-
-  auto it_start = lowerBound(m_ranges, range.start()
-  , [](Range const & r, KTextEditor::Cursor const & c){
-      return r.end() < c;
-    }
-  );
-  auto it_end = std::lower_bound(it_start, m_ranges.end(), range.end()
-  , [](Range const & r, KTextEditor::Cursor const & c){
-      return r.start() < c;
-    }
-  );
+  auto it_start = CursorListDetail::lowerBoundEnd(m_ranges, range.start());
 
   if (it_start == m_ranges.end()) {
     auto moving_range = m_smart->newMovingRange(range);
     moving_range->setAttribute(m_attr);
     m_ranges.emplace_back(moving_range);
+    return ;
   }
-  else if (it_start == it_end) {
+
+  auto it_end = std::lower_bound(it_start, m_ranges.end(), range.end()
+  , [](Range const & r, KTextEditor::Cursor const & c){
+      return r.start() < c;
+    }
+  );
+  if (it_start == it_end) {
     if (it_start->start() == range.end()) {
       it_start->setRange(range.start(), it_start->end());
     }
@@ -679,26 +684,10 @@ void MultiCursorView::setRange(const KTextEditor::Range& range)
   }
   else {
     if (it_start + 1 == it_end && it_start->contains(range)) {
-      const KTextEditor::Range rightrange(range.end(), it_start->end());
-      const KTextEditor::Range leftrange(it_start->start(), range.start());
-      if (!rightrange.isEmpty()) {
-        if (leftrange.isEmpty()) {
-          it_start->setRange(rightrange);
-        }
-        else {
-          it_start->setRange(leftrange.start(), range.start());
-          auto moving_range = m_smart->newMovingRange(rightrange);
-          moving_range->setAttribute(m_attr);
-          m_ranges.emplace(it_start+1, moving_range);
-        }
+      if (!remove_if_contains) {
+        return ;
       }
-      else if (leftrange.isEmpty()) {
-        m_ranges.erase(it_start);
-        checkRanges();
-      }
-      else {
-        it_start->setRange(leftrange.start(), range.start());
-      }
+      removeRange(it_start, range);
     }
     else {
       it_start->setRange(
@@ -707,6 +696,31 @@ void MultiCursorView::setRange(const KTextEditor::Range& range)
       );
       m_ranges.erase(++it_start, it_end);
     }
+  }
+}
+
+void MultiCursorView::removeRange(
+  RangeList::iterator it, const KTextEditor::Range& range)
+{
+  const KTextEditor::Range rightrange(range.end(), it->end());
+  const KTextEditor::Range leftrange(it->start(), range.start());
+  if (!rightrange.isEmpty()) {
+    if (leftrange.isEmpty()) {
+      it->setRange(rightrange);
+    }
+    else {
+      it->setRange(leftrange.start(), range.start());
+      auto moving_range = m_smart->newMovingRange(rightrange);
+      moving_range->setAttribute(m_attr);
+      m_ranges.emplace(it+1, moving_range);
+    }
+  }
+  else if (leftrange.isEmpty()) {
+    m_ranges.erase(it);
+    checkRanges();
+  }
+  else {
+    it->setRange(leftrange.start(), range.start());
   }
 }
 
@@ -871,15 +885,14 @@ void MultiCursorView::clearRanges()
 
 void MultiCursorView::copyRanges()
 {
-  // TODO block mode
   int l = m_ranges.front().end().line();
-  QString s;
-  for (Range & r : m_ranges) {
+  QString s(m_document->text(m_ranges.front().toRange()));
+  std::for_each(m_ranges.cbegin()+1, m_ranges.cend(), [&](Range const & r) {
     const KTextEditor::Range range = r.toRange();
     s.append(range.start().line() != l ? '\n' : ' ');
     l = range.end().line();
     s.append(m_document->text(range));
-  }
+  });
   QApplication::clipboard()->setText(s);
 }
 
@@ -903,15 +916,59 @@ void MultiCursorView::pasteRanges()
 void MultiCursorView::setRange()
 {
   if (m_view->selection()) {
-    setRange(m_view->selectionRange());
+    const KTextEditor::Range & range = m_view->selectionRange();
+
+    if (m_view->blockSelection()) {
+      int column_start = range.start().column();
+      int column_end = range.end().column();
+
+      if (column_start == column_end) {
+        return ;
+      }
+
+      if (column_end < column_start) {
+        using std::swap;
+        swap(column_end, column_start);
+      }
+
+      const int line_start = range.start().line();
+      const int line_end = range.end().line();
+
+      int line = line_start;
+
+      for (; line <= line_end; ++line) {
+        auto it_start = CursorListDetail::lowerBoundEnd(
+          m_ranges, KTextEditor::Cursor(line, column_start));
+        if (it_start == m_ranges.end()
+         || !it_start->contains(KTextEditor::Range(
+           line, column_start, line, column_end))) {
+          break;
+        }
+      }
+
+      if (line > line_end) {
+        for (line = line_start; line <= line_end; ++line) {
+          removeRange(
+            CursorListDetail::lowerBoundEnd(
+              m_ranges, KTextEditor::Cursor(line, column_start)),
+            KTextEditor::Range(line, column_start, line, column_end)
+          );
+        }
+      }
+      else {
+        for (; line <= line_end; ++line) {
+          KTextEditor::Range range(line, column_start, line, column_end);
+          setRange(range, false);
+        }
+      }
+    }
+    else {
+      setRange(range);
+    }
   }
   else {
     KTextEditor::Cursor cursor = m_view->cursorPosition();
-    auto it = lowerBound(m_ranges, cursor
-    , [](Range const & r, KTextEditor::Cursor const & c){
-        return r.end() < c;
-      }
-    );
+    auto it = CursorListDetail::lowerBoundEnd(m_ranges, cursor);
     if (it != m_ranges.end() && it->start() <= cursor) {
       m_ranges.erase(it);
       checkRanges();

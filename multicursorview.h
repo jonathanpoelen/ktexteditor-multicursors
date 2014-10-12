@@ -190,7 +190,8 @@ private:
 
 private:
   void setCursor(const KTextEditor::Cursor& cursor);
-	void setRange(const KTextEditor::Range& range);
+  void setRange(const KTextEditor::Range& range, bool remove_if_contains = 1);
+	void removeRange(RangeList::iterator, const KTextEditor::Range& range);
 
 public:
 	void setActiveCtrlClick(bool active, bool remove_cursor_if_only_click);
