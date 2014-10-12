@@ -333,10 +333,6 @@ MultiCursorView::MultiCursorView(KTextEditor::View *view, KTextEditor::Attribute
   setEnabledCursors(false);
 	setEnabledRanges(false);
 	setXMLFile("multicursorui.rc");
-
-	// TODO
-//   connect(m_view, SIGNAL(selectionChanged(KTextEditor::View*)), this, SLOT(selectionChanged(KTextEditor::View*)));
-
 }
 
 MultiCursorView::~MultiCursorView()
@@ -608,28 +604,6 @@ void MultiCursorView::cursorPositionChanged(KTextEditor::View*, const KTextEdito
 	checkCursors();
 }
 
-// TODO
-KTextEditor::Range m_range;
-// only if multi-selection mode (and with mouse ?)
-void MultiCursorView::selectionChanged(KTextEditor::View*)
-{
-  // only if ctrl
-  if (m_view->selection()) {
-    m_range = m_view->selectionRange();
-  }
-  else {
-    if (m_range.isValid()) {
-      setRange(m_range);
-
-      for (auto & c : m_ranges) {
-        qDebug() << c.start() << ' ' << c.end();
-      }
-      qDebug() << "------------";
-    }
-    m_range = m_range.invalid();
-  }
-}
-
 void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
 {
   auto it = lowerBound(m_cursors, m_view->cursorPosition());
@@ -749,17 +723,22 @@ void MultiCursorView::setActiveCtrlClick(bool active, bool remove_cursor_if_only
 
 bool MultiCursorView::eventFilter(QObject* obj, QEvent* event)
 {
-    if (event->type() == QEvent::MouseButtonRelease) {
-        if (QApplication::keyboardModifiers() & Qt::ControlModifier) {
-            setCursor(m_view->cursorPosition());
-            return false;
-        }
-        else if (m_remove_cursor_if_only_click) {
-            removeAllCursors();
-            return false;
-        }
+  if (event->type() == QEvent::MouseButtonRelease) {
+    if (QApplication::keyboardModifiers() & Qt::ControlModifier) {
+      if (m_view->selection()) {
+        setRange(m_view->selectionRange());
+      }
+      else {
+        setCursor(m_view->cursorPosition());
+      }
+      return false;
     }
-    return QObject::eventFilter(obj, event);
+    else if (m_remove_cursor_if_only_click) {
+      removeAllCursors();
+      return false;
+    }
+  }
+  return QObject::eventFilter(obj, event);
 }
 
 void MultiCursorView::textInserted(KTextEditor::Document *doc, const KTextEditor::Range &range)
