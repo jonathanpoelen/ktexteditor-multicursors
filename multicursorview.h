@@ -25,18 +25,14 @@
 
 #include <KXMLGUIClient>
 #include <KTextEditor/Attribute>
-
-// #include <KTextEditor/Cursor>
-// #include <KTextEditor/Range>
-// #include <KTextEditor/MovingCursor>
 #include <KTextEditor/MovingRange>
 
 namespace KTextEditor
 {
-	class View;
-	class Document;
+  class View;
+  class Document;
   class MovingRange;
-	class MovingInterface;
+  class MovingInterface;
 }
 
 class MultiCursorView;
@@ -46,12 +42,12 @@ class MultiCursorView
 : public QObject
 , public KXMLGUIClient
 {
-	Q_OBJECT
+  Q_OBJECT
 
   class CursorListDetail;
 public:
-	explicit MultiCursorView(KTextEditor::View *view, KTextEditor::Attribute::Ptr);
-	~MultiCursorView();
+  explicit MultiCursorView(KTextEditor::View *view, KTextEditor::Attribute::Ptr);
+  ~MultiCursorView();
 
 private:
   struct Cursor
@@ -91,22 +87,22 @@ private:
     std::unique_ptr<KTextEditor::MovingRange> m_range;
   };
 
-	struct Range
-	{
-		Range(KTextEditor::MovingRange * range) noexcept
-		: m_range(range)
-		{}
+  struct Range
+  {
+    Range(KTextEditor::MovingRange * range) noexcept
+    : m_range(range)
+    {}
 
     const KTextEditor::MovingCursor& start() const
     { return m_range->start(); }
-		const KTextEditor::MovingCursor& end() const
-		{ return m_range->end(); }
+    const KTextEditor::MovingCursor& end() const
+    { return m_range->end(); }
 
     void setRange(const KTextEditor::Range & r)
     { m_range->setRange(r); }
 
     void setRange(const KTextEditor::Cursor & c1, const KTextEditor::Cursor & c2)
-		{ m_range->setRange(c1, c2); }
+    { m_range->setRange(c1, c2); }
 
     bool contains(const KTextEditor::Range & range) const
     { return m_range->contains(range); }
@@ -114,33 +110,33 @@ private:
     const KTextEditor::Range toRange() const
     { return m_range->toRange(); }
 
-	private:
-		std::unique_ptr<KTextEditor::MovingRange> m_range;
-	};
-	///TODO boost::flat_set ?
+  private:
+    std::unique_ptr<KTextEditor::MovingRange> m_range;
+  };
+  ///TODO boost::flat_set ?
   typedef std::vector<Cursor> CursorList;
-	typedef std::vector<Range> RangeList;
+  typedef std::vector<Range> RangeList;
 
 private slots:
-	void exclusiveEditStart(KTextEditor::Document*);
-	void exclusiveEditEnd(KTextEditor::Document*);
+  void exclusiveEditStart(KTextEditor::Document*);
+  void exclusiveEditEnd(KTextEditor::Document*);
 
-	void textInserted(KTextEditor::Document*, const KTextEditor::Range&);
-	void textRemoved(KTextEditor::Document*, const KTextEditor::Range&, const QString&);
-	void textBackspace();
-	void textDelete();
+  void textInserted(KTextEditor::Document*, const KTextEditor::Range&);
+  void textRemoved(KTextEditor::Document*, const KTextEditor::Range&, const QString&);
+  void textBackspace();
+  void textDelete();
 
-	void setCursor();
-	void removeCursorsOnLine();
+  void setCursor();
+  void removeCursorsOnLine();
   void removeAllCursors();
 
-	void moveToNextCursor();
+  void moveToNextCursor();
   void moveToPreviousCursor();
 
   void setActiveCursor();
 
   void setSynchronizedCursors();
-	void cursorPositionChanged(KTextEditor::View*, const KTextEditor::Cursor&);
+  void cursorPositionChanged(KTextEditor::View*, const KTextEditor::Cursor&);
 
   void extendLeftSelection();
   void extendRightSelection();
@@ -161,15 +157,14 @@ private slots:
   void moveToNextEndRange();
   void moveToPreviousEndRange();
 
-// private:
-//    void debug() const;
-
 private:
-	bool endEditing();
-	bool startEditing();
-	void insertText(const QString &text);
+  bool endEditing();
+  bool startEditing();
+  void insertText(const QString &text);
 
-	void removeRange(const CursorList::iterator& it);
+  bool eventFilter(QObject *obj, QEvent *ev);
+
+  void setCursor(const KTextEditor::Cursor& cursor);
 
   void connectCursors();
   void disconnectCursors();
@@ -185,28 +180,24 @@ private:
   void checkRanges();
   void setEnabledRanges(bool);
 
-  bool eventFilter(QObject *obj, QEvent *ev);
-
-private:
-  void setCursor(const KTextEditor::Cursor& cursor);
   void setRange(const KTextEditor::Range& range, bool remove_if_contains = 1);
-	void removeRange(RangeList::iterator, const KTextEditor::Range& range);
+  void removeRange(RangeList::iterator, const KTextEditor::Range& range);
 
 public:
-	void setActiveCtrlClick(bool active, bool remove_cursor_if_only_click);
+  void setActiveCtrlClick(bool active, bool remove_cursor_if_only_click);
 
 private:
-	KTextEditor::View *m_view;
-	KTextEditor::Document *m_document;
-	KTextEditor::MovingInterface *m_smart;
-	bool m_text_edit;
-	bool m_active;
-  bool m_synchronize_cursor;
-	bool m_remove_cursor_if_only_click;
-	KTextEditor::Cursor m_cursor;
+  KTextEditor::View *m_view;
+  KTextEditor::Document *m_document;
+  KTextEditor::MovingInterface *m_smart;
+  KTextEditor::Attribute::Ptr m_cursor_attr;
+  KTextEditor::Cursor m_cursor;
   CursorList m_cursors;
-	RangeList m_ranges;
-	KTextEditor::Attribute::Ptr m_attr;
+  RangeList m_ranges;
+  bool m_has_exclusive_edit;
+  bool m_is_active;
+  bool m_is_synchronized_cursor;
+  bool m_remove_cursor_if_only_click;
 };
 
 #endif
