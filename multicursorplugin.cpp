@@ -102,9 +102,6 @@ void MultiCursorPlugin::readConfig()
 void MultiCursorPlugin::writeConfig()
 {
   KConfigGroup cg(KGlobal::config(), "MultiCursor Plugin");
-  qDebug() << "curattr: " <<  m_cursor_attr->background().color();
-  qDebug() << "selectattr" <<  m_selection_attr->background().color();
-
   cg.writeEntry("cursor_brush", m_cursor_attr->background().color());
   cg.writeEntry("underline_color", m_cursor_attr->underlineColor());
   cg.writeEntry("underline_style", int(m_cursor_attr->underlineStyle()));

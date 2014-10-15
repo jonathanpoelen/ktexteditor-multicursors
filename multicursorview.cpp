@@ -789,13 +789,6 @@ void MultiCursorView::insertText(const QString &text)
   }
 }
 
-/*void MultiCursorView::debug() const
-{
-	for (Ranges::const_iterator it = m_cursors.begin(), end = m_cursors.end(); it != end; ++it) {
-		qDebug() << **it;
-	}
-}*/
-
 void MultiCursorView::textRemoved(
   KTextEditor::Document* doc, const KTextEditor::Range& range,
   const QString& text)

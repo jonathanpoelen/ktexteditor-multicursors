@@ -26,7 +26,6 @@
 #include <QtGui/QBoxLayout>
 #include <QtGui/QCheckBox>
 #include <QtGui/QLabel>
-#include <QDebug>
 
 namespace {
   template<class Ws>
@@ -147,8 +146,6 @@ void MultiCursorConfig::save()
 {
   if (MultiCursorPlugin::self())
   {
-    qDebug() << "color: " << w.cursor.color->color();
-    qDebug() << "bg: " << w.selection.color->color();
     MultiCursorPlugin * self = MultiCursorPlugin::self();
     self->setCursorBrush(w.cursor.color->color());
     self->setCursorUnderlineStyle(QTextCharFormat::UnderlineStyle(
@@ -158,7 +155,6 @@ void MultiCursorConfig::save()
     self->setActiveCursorCtrlClick(
       w.cursor.active_ctrl_click->isChecked(),
       w.cursor.remove_cursor_if_only_click->isChecked());
-    self->writeConfig();
 
     self->setSelectionBrush(w.selection.color->color());
     self->setSelectionUnderlineStyle(QTextCharFormat::UnderlineStyle(
@@ -167,6 +163,8 @@ void MultiCursorConfig::save()
 
     self->setActiveSelectionCtrlClick(
       w.selection.active_ctrl_click->isChecked());
+
+    self->writeConfig();
   }
   else
   {
