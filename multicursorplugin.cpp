@@ -19,9 +19,6 @@
 #include "multicursorplugin.h"
 #include "multicursorconfig.h"
 
-// #include <KPluginFactory>
-// #include <KPluginLoader>
-#include <QApplication>
 #include <KConfigGroup>
 #include <KTextEditor/View>
 
@@ -31,16 +28,18 @@ K_PLUGIN_FACTORY_DEFINITION(MultiCursorPluginFactory,
   registerPlugin<MultiCursorPlugin>("ktexteditor_multicursor");
   registerPlugin<MultiCursorConfig>("ktexteditor_multicursor_config");
 )
-K_EXPORT_PLUGIN(MultiCursorPluginFactory("ktexteditor_multicursor", "ktexteditor_plugins"))
+K_EXPORT_PLUGIN(MultiCursorPluginFactory(
+  "ktexteditor_multicursor", "ktexteditor_plugins")
+)
 
-MultiCursorPlugin::MultiCursorPlugin(QObject *parent, const QVariantList &args)
+MultiCursorPlugin::MultiCursorPlugin(QObject *parent, const QVariantList &)
 : KTextEditor::Plugin(parent)
-, m_views()
-, m_attr(new KTextEditor::Attribute)
+, m_cursor_attr(new KTextEditor::Attribute)
+, m_selection_attr(new KTextEditor::Attribute)
+, m_active_cursor_ctrl_click(false)
 , m_remove_cursor_if_only_click(false)
-, m_active_ctrl_click(false)
+, m_active_selection_ctrl_click(false)
 {
-  Q_UNUSED(args);
   plugin = this;
 
   readConfig();
@@ -53,9 +52,13 @@ MultiCursorPlugin::~MultiCursorPlugin()
 
 void MultiCursorPlugin::addView(KTextEditor::View *view)
 {
-  MultiCursorView *nview = new MultiCursorView(view, m_attr);
-  if (m_active_ctrl_click) {
-    nview->setActiveCtrlClick(true, m_remove_cursor_if_only_click);
+  MultiCursorView *nview = new MultiCursorView(
+    view, m_cursor_attr, m_selection_attr);
+  if (m_active_cursor_ctrl_click) {
+    nview->setActiveCursorCtrlClick(true, m_remove_cursor_if_only_click);
+  }
+  if (m_active_selection_ctrl_click) {
+    nview->setActiveSelectionCtrlClick(true);
   }
   m_views.append(nview);
 }
@@ -69,38 +72,68 @@ void MultiCursorPlugin::removeView(KTextEditor::View *view)
       delete nview;
     }
   }
-  if (m_active_ctrl_click && m_views.empty()) {
-    QApplication::instance()->removeEventFilter(this);
-  }
 }
 
 void MultiCursorPlugin::readConfig()
 {
   KConfigGroup cg(KGlobal::config(), "MultiCursor Plugin");
   const DefaultValues values;
-  m_attr->setBackground(cg.readEntry("cursor_brush", values.cursorColor));
-  m_attr->setUnderlineColor(cg.readEntry("underline_color", values.underlineColor));
-  int line_style = cg.readEntry("underline_style", values.underlineStyle);
-  m_attr->setUnderlineStyle(QTextCharFormat::UnderlineStyle(line_style));
-  m_remove_cursor_if_only_click = cg.readEntry("remove_cursor_if_only_click", false);
-  m_active_ctrl_click = cg.readEntry("active_ctrl_click", true);
+  m_cursor_attr->setBackground(
+    cg.readEntry("cursor_brush", values.cursor.color));
+  m_cursor_attr->setUnderlineColor(
+    cg.readEntry("underline_color", values.cursor.underline_color));
+  m_cursor_attr->setUnderlineStyle(QTextCharFormat::UnderlineStyle(
+    cg.readEntry("underline_style", int(values.cursor.underline_style))));
+  m_remove_cursor_if_only_click
+    = cg.readEntry("remove_cursor_if_only_click", false);
+  m_active_cursor_ctrl_click = cg.readEntry("active_ctrl_click", true);
+
+  m_selection_attr->setBackground(
+    cg.readEntry("bg_selection", values.selection.color));
+  m_selection_attr->setUnderlineColor(
+    cg.readEntry(
+      "underline_color_selection", values.selection.underline_color));
+  m_selection_attr->setUnderlineStyle(QTextCharFormat::UnderlineStyle(
+    cg.readEntry(
+      "underline_style_selection", int(values.selection.underline_style))));
+  m_active_selection_ctrl_click = cg.readEntry("active_ctrl_click_selection", true);
 }
 
 void MultiCursorPlugin::writeConfig()
 {
   KConfigGroup cg(KGlobal::config(), "MultiCursor Plugin");
-  cg.writeEntry("cursor_brush", m_attr->background().color());
-  cg.writeEntry("underline_color", m_attr->underlineColor());
-  cg.writeEntry("underline_style", int(m_attr->underlineStyle()));
+  qDebug() << "curattr: " <<  m_cursor_attr->background().color();
+  qDebug() << "selectattr" <<  m_selection_attr->background().color();
+
+  cg.writeEntry("cursor_brush", m_cursor_attr->background().color());
+  cg.writeEntry("underline_color", m_cursor_attr->underlineColor());
+  cg.writeEntry("underline_style", int(m_cursor_attr->underlineStyle()));
   cg.writeEntry("remove_cursor_if_only_click", m_remove_cursor_if_only_click);
-  cg.writeEntry("active_ctrl_click", m_active_ctrl_click);
+  cg.writeEntry("active_ctrl_click", m_active_cursor_ctrl_click);
+
+  cg.writeEntry("bg_selection", m_selection_attr->background().color());
+  cg.writeEntry(
+    "underline_color_selection", m_selection_attr->underlineColor());
+  cg.writeEntry(
+    "underline_style_selection", int(m_selection_attr->underlineStyle()));
+  cg.writeEntry("active_ctrl_click_selection", m_active_selection_ctrl_click);
 }
 
-void MultiCursorPlugin::setActiveCtrlClick(bool active, bool remove_cursor_if_only_click)
-{
-  m_active_ctrl_click = active;
+void MultiCursorPlugin::setActiveCursorCtrlClick(
+  bool active, bool remove_cursor_if_only_click
+) {
+  m_active_cursor_ctrl_click = active;
   m_remove_cursor_if_only_click = remove_cursor_if_only_click;
   for (MultiCursorView * v: m_views) {
-    v->setActiveCtrlClick(active, remove_cursor_if_only_click);
+    v->setActiveCursorCtrlClick(active, remove_cursor_if_only_click);
   }
 }
+
+void MultiCursorPlugin::setActiveSelectionCtrlClick(bool active)
+{
+  m_active_selection_ctrl_click = active;
+  for (MultiCursorView * v: m_views) {
+    v->setActiveSelectionCtrlClick(active);
+  }
+}
+

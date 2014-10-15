@@ -46,7 +46,10 @@ class MultiCursorView
 
   class CursorListDetail;
 public:
-  explicit MultiCursorView(KTextEditor::View *view, KTextEditor::Attribute::Ptr);
+  explicit MultiCursorView(
+    KTextEditor::View *view
+  , KTextEditor::Attribute::Ptr cursor_attr
+  , KTextEditor::Attribute::Ptr selection_attr);
   ~MultiCursorView();
 
 private:
@@ -183,14 +186,24 @@ private:
   void setRange(const KTextEditor::Range& range, bool remove_if_contains = 1);
   void removeRange(RangeList::iterator, const KTextEditor::Range& range);
 
+  KTextEditor::MovingRange * newMovingCursor(
+    KTextEditor::Cursor const & cursor) const;
+  KTextEditor::MovingRange * newMovingRange(
+    KTextEditor::Range const & range) const;
+
 public:
-  void setActiveCtrlClick(bool active, bool remove_cursor_if_only_click);
+  void setActiveCursorCtrlClick(bool active, bool remove_cursor_if_only_click);
+  void setActiveSelectionCtrlClick(bool active);
+
+private:
+  void setEventFilter(bool);
 
 private:
   KTextEditor::View *m_view;
   KTextEditor::Document *m_document;
   KTextEditor::MovingInterface *m_smart;
   KTextEditor::Attribute::Ptr m_cursor_attr;
+  KTextEditor::Attribute::Ptr m_selection_attr;
   KTextEditor::Cursor m_cursor;
   CursorList m_cursors;
   RangeList m_ranges;
@@ -198,6 +211,8 @@ private:
   bool m_is_active;
   bool m_is_synchronized_cursor;
   bool m_remove_cursor_if_only_click;
+  bool m_has_cursor_ctrl;
+  bool m_has_selection_ctrl;
 };
 
 #endif

@@ -23,6 +23,7 @@
 class KColorButton;
 class KComboBox;
 class QCheckBox;
+class QLabel;
 
 class MultiCursorConfig
 : public KCModule
@@ -39,13 +40,27 @@ public:
 
 private Q_SLOTS:
 	void slotChanged();
+  void underlineStyleCursorChanged(int index);
+  void underlineStyleSelectionChanged(int index);
 
 private:
-	KColorButton * m_cursor_color;
-	KComboBox * m_underline_style;
-	KColorButton * m_underline_color;
-	QCheckBox * m_active_ctrl_click;
-	QCheckBox * m_remove_cursor_if_only_click;
+  struct {
+    struct {
+      KColorButton * color;
+      KComboBox * underline_style;
+      QLabel * underline_color_label;
+      KColorButton * underline_color;
+      QCheckBox * active_ctrl_click;
+      QCheckBox * remove_cursor_if_only_click;
+    } cursor;
+    struct {
+      KColorButton * color;
+      KComboBox * underline_style;
+      QLabel * underline_color_label;
+      KColorButton * underline_color;
+      QCheckBox * active_ctrl_click;
+    } selection;
+  } w;
 };
 
 #endif // MCURSORS_CONFIG_H

@@ -234,17 +234,24 @@ struct MultiCursorView::CursorListDetail
   }
 };
 
-MultiCursorView::MultiCursorView(KTextEditor::View *view, KTextEditor::Attribute::Ptr attr)
+MultiCursorView::MultiCursorView(
+  KTextEditor::View *view
+, KTextEditor::Attribute::Ptr cursor_attr
+, KTextEditor::Attribute::Ptr selection_attr
+)
 : QObject(view)
 , KXMLGUIClient(view)
 , m_view(view)
 , m_document(view->document())
 , m_smart(qobject_cast<KTextEditor::MovingInterface*>(m_document))
-, m_cursor_attr(attr)
+, m_cursor_attr(cursor_attr)
+, m_selection_attr(selection_attr)
 , m_has_exclusive_edit(false)
 , m_is_active(true)
 , m_is_synchronized_cursor(false)
 , m_remove_cursor_if_only_click(false)
+, m_has_cursor_ctrl(false)
+, m_has_selection_ctrl(false)
 {
 	setComponentData(MultiCursorPluginFactory::componentData());
 
@@ -611,16 +618,13 @@ void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
     checkCursors();
   }
   else {
-    KTextEditor::MovingRange * range = m_smart->newMovingRange(
-      KTextEditor::Range(cursor, cursor.line(), cursor.column() + 1));
-    range->setAttribute(m_cursor_attr);
-
+    auto moving_cursor = newMovingCursor(cursor);
     if (m_cursors.empty()) {
-      m_cursors.emplace_back(range);
+      m_cursors.emplace_back(moving_cursor);
       startCursors();
     }
     else {
-      m_cursors.emplace(it, range);
+      m_cursors.emplace(it, moving_cursor);
     }
   }
 }
@@ -635,9 +639,7 @@ void MultiCursorView::setRange(
   auto it_start = CursorListDetail::lowerBoundEnd(m_ranges, range.start());
 
   if (it_start == m_ranges.end()) {
-    auto moving_range = m_smart->newMovingRange(range);
-    moving_range->setAttribute(m_cursor_attr);
-    m_ranges.emplace_back(moving_range);
+    m_ranges.emplace_back(newMovingRange(range));
     return ;
   }
 
@@ -651,9 +653,7 @@ void MultiCursorView::setRange(
       it_start->setRange(range.start(), it_start->end());
     }
     else {
-      auto moving_range = m_smart->newMovingRange(range);
-      moving_range->setAttribute(m_cursor_attr);
-      m_ranges.emplace(it_start, moving_range);
+      m_ranges.emplace(it_start, newMovingRange(range));
     }
   }
   else {
@@ -684,9 +684,7 @@ void MultiCursorView::removeRange(
     }
     else {
       it->setRange(leftrange.start(), range.start());
-      auto moving_range = m_smart->newMovingRange(rightrange);
-      moving_range->setAttribute(m_cursor_attr);
-      m_ranges.emplace(it+1, moving_range);
+      m_ranges.emplace(it+1, newMovingRange(rightrange));
     }
   }
   else if (leftrange.isEmpty()) {
@@ -710,15 +708,32 @@ void MultiCursorView::setCursor()
 	}
 }
 
-void MultiCursorView::setActiveCtrlClick(bool active, bool remove_cursor_if_only_click)
+void MultiCursorView::setActiveCursorCtrlClick(
+  bool active, bool remove_cursor_if_only_click)
 {
-    m_remove_cursor_if_only_click = remove_cursor_if_only_click;
-    if (active) {
-      m_view->focusProxy()->installEventFilter(this);
-    }
-    else {
-      m_view->focusProxy()->removeEventFilter(this);
-    }
+  m_remove_cursor_if_only_click = remove_cursor_if_only_click;
+  setEventFilter(active);
+  m_has_cursor_ctrl = active;
+}
+
+void MultiCursorView::setActiveSelectionCtrlClick(bool active)
+{
+  setEventFilter(active);
+  m_has_selection_ctrl = active;
+}
+
+void MultiCursorView::setEventFilter(bool x)
+{
+  if ((m_has_selection_ctrl || m_has_cursor_ctrl) == x) {
+    return;
+  }
+
+  if (x) {
+    m_view->focusProxy()->installEventFilter(this);
+  }
+  else {
+    m_view->focusProxy()->removeEventFilter(this);
+  }
 }
 
 bool MultiCursorView::eventFilter(QObject* obj, QEvent* event)
@@ -726,12 +741,17 @@ bool MultiCursorView::eventFilter(QObject* obj, QEvent* event)
   if (event->type() == QEvent::MouseButtonRelease) {
     if (QApplication::keyboardModifiers() & Qt::ControlModifier) {
       if (m_view->selection()) {
-        setRange(m_view->selectionRange());
+        if (m_has_selection_ctrl) {
+          setRange(m_view->selectionRange());
+          return false;
+        }
       }
       else {
-        setCursor(m_view->cursorPosition());
+        if (m_has_cursor_ctrl) {
+          setCursor(m_view->cursorPosition());
+          return false;
+        }
       }
-      return false;
     }
     else if (m_remove_cursor_if_only_click) {
       removeAllCursors();
@@ -1053,10 +1073,9 @@ void MultiCursorView::removeRangesOnline()
   );
   if (it_start != m_ranges.end()) {
     if (it_start->start().line() < line && it_start->end().line() > line) {
-      auto moving_range = m_smart->newMovingRange(KTextEditor::Range(
+      auto moving_range = newMovingRange(KTextEditor::Range(
         KTextEditor::Cursor(line+1, 0), it_start->end()
       ));
-      moving_range->setAttribute(m_cursor_attr);
       it_start->setRange(
         it_start->start(),
         KTextEditor::Cursor(line-1, m_document->lineLength(line-1))
@@ -1116,6 +1135,23 @@ bool MultiCursorView::endEditing()
 {
 	m_has_exclusive_edit = false;
 	return m_document->endEditing();
+}
+
+KTextEditor::MovingRange* MultiCursorView::newMovingCursor(
+  const KTextEditor::Cursor& cursor) const
+{
+  KTextEditor::MovingRange * moving_range = m_smart->newMovingRange(
+    KTextEditor::Range(cursor, cursor.line(), cursor.column() + 1));
+  moving_range->setAttribute(m_cursor_attr);
+  return moving_range;
+}
+
+KTextEditor::MovingRange* MultiCursorView::newMovingRange(
+  const KTextEditor::Range& range) const
+{
+  KTextEditor::MovingRange * moving_range = m_smart->newMovingRange(range);
+  moving_range->setAttribute(m_selection_attr);
+  return moving_range;
 }
 
 #include "multicursorview.moc"

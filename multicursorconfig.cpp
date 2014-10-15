@@ -18,9 +18,6 @@
 #include "multicursorconfig.h"
 #include "multicursorplugin.h"
 
-#include <KLocale>
-#include <KPluginFactory>
-#include <KPluginLoader>
 #include <KConfigGroup>
 #include <KColorButton>
 #include <KComboBox>
@@ -29,143 +26,269 @@
 #include <QtGui/QBoxLayout>
 #include <QtGui/QCheckBox>
 #include <QtGui/QLabel>
-#include <QtGui/QFrame>
+#include <QDebug>
 
+namespace {
+  template<class Ws>
+  void build_widget_decoration(
+    MultiCursorConfig * this_, QVBoxLayout * layout, Ws & w) {
+    QHBoxLayout * hlayout = new QHBoxLayout(this_);
+    w.color = new KColorButton(this_);
+    w.color->setAlphaChannelEnabled(true);
+    hlayout->addWidget(new QLabel(i18n("Baground color")));
+    hlayout->addWidget(w.color);
+    layout->addLayout(hlayout);
+
+    hlayout = new QHBoxLayout(this_);
+    w.underline_style = new KComboBox(this_);
+    w.underline_style->addItem(i18n("None"));
+    w.underline_style->addItem(i18n("Single"));
+    w.underline_style->addItem(i18n("Dash"));
+    w.underline_style->addItem(i18n("Dot line"));
+    w.underline_style->addItem(i18n("Dash dot line"));
+    w.underline_style->addItem(i18n("Dash dot dot line"));
+    hlayout->addWidget(new QLabel(i18n("Underline style")));
+    hlayout->addWidget(w.underline_style);
+    layout->addLayout(hlayout);
+
+    hlayout = new QHBoxLayout(this_);
+    w.underline_color = new KColorButton(this_);
+    w.underline_color_label = new QLabel(i18n("Underline color"));
+    hlayout->addWidget(w.underline_color_label);
+    hlayout->addWidget(w.underline_color);
+    layout->addLayout(hlayout);
+  }
+}
 
 MultiCursorConfig::MultiCursorConfig(QWidget *parent, const QVariantList &args)
 : KCModule(MultiCursorPluginFactory::componentData(), parent, args)
 {
-	QVBoxLayout * layout = new QVBoxLayout(this);
+  QVBoxLayout * layout = new QVBoxLayout(this);
 
-	QHBoxLayout * hlayout = new QHBoxLayout(this);
-	m_cursor_color = new KColorButton(this);
-	m_cursor_color->setAlphaChannelEnabled(true);
-	hlayout->addWidget(new QLabel(i18n("Background color cursor")));
-	hlayout->addWidget(m_cursor_color);
-	layout->addLayout(hlayout);
+  build_widget_decoration(this, layout, w.cursor);
 
-	hlayout = new QHBoxLayout(this);
-	m_underline_style = new KComboBox(this);
-	m_underline_style->addItem(i18n("None"));
-	m_underline_style->addItem(i18n("Single"));
-	m_underline_style->addItem(i18n("Dash"));
-	m_underline_style->addItem(i18n("Dot line"));
-	m_underline_style->addItem(i18n("Dash dot line"));
-	m_underline_style->addItem(i18n("Dash dot dot line"));
-	hlayout->addWidget(new QLabel(i18n("Underline style")));
-	hlayout->addWidget(m_underline_style);
-	layout->addLayout(hlayout);
+  w.cursor.active_ctrl_click
+    = new QCheckBox(i18n("Set cursor with Ctrl+Click"), this);
+  layout->addWidget(w.cursor.active_ctrl_click);
 
-	hlayout = new QHBoxLayout(this);
-	m_underline_color = new KColorButton(this);
-	QLabel * lunderline_color = new QLabel(i18n("Underline color"));
-	hlayout->addWidget(lunderline_color);
-	hlayout->addWidget(m_underline_color);
-	layout->addLayout(hlayout);
+  w.cursor.remove_cursor_if_only_click
+    = new QCheckBox(i18n("Removing all cursors on click without Ctrl"), this);
+  layout->addWidget(w.cursor.remove_cursor_if_only_click);
 
-	hlayout = new QHBoxLayout(this);
-	m_active_ctrl_click = new QCheckBox(i18n("Set cursor with Ctrl+Click"), this);
-	layout->addWidget(m_active_ctrl_click);
+  build_widget_decoration(this, layout, w.selection);
 
-	hlayout = new QHBoxLayout(this);
-	m_remove_cursor_if_only_click = new QCheckBox(i18n("Removing all cursors on click without Ctrl"), this);
-	layout->addWidget(m_remove_cursor_if_only_click);
+  w.selection.active_ctrl_click
+    = new QCheckBox(i18n("Set selection with Ctrl+Click"), this);
+  layout->addWidget(w.selection.active_ctrl_click);
 
-	setLayout(layout);
+  setLayout(layout);
 
-	load();
+  //load();
 
-	QObject::connect(m_cursor_color, SIGNAL(changed(QColor)),
-									 this, SLOT(slotChanged()));
-	QObject::connect(m_underline_color, SIGNAL(changed(QColor)),
-									 this, SLOT(slotChanged()));
-	QObject::connect(m_underline_style, SIGNAL(currentIndexChanged(int)),
-									 this, SLOT(slotChanged()));
-	QObject::connect(m_active_ctrl_click, SIGNAL(stateChanged(int)),
-									 this, SLOT(slotChanged()));
-	QObject::connect(m_remove_cursor_if_only_click, SIGNAL(stateChanged(int)),
-									 this, SLOT(slotChanged()));
+  QObject::connect(
+    w.cursor.color, SIGNAL(changed(QColor)),
+    this, SLOT(slotChanged()));
+  QObject::connect(
+    w.cursor.underline_color, SIGNAL(changed(QColor)),
+    this, SLOT(slotChanged()));
+  QObject::connect(
+    w.cursor.underline_style, SIGNAL(currentIndexChanged(int)),
+    this, SLOT(slotChanged()));
+  QObject::connect(
+    w.cursor.active_ctrl_click, SIGNAL(stateChanged(int)),
+    this, SLOT(slotChanged()));
+  QObject::connect(
+    w.cursor.remove_cursor_if_only_click, SIGNAL(stateChanged(int)),
+    this, SLOT(slotChanged()));
 
-	QObject::connect(m_underline_style, SIGNAL(currentIndexChanged(int)),
-									 m_underline_color, SLOT(setEnabled(bool)));
-	QObject::connect(m_underline_style, SIGNAL(currentIndexChanged(int)),
-									 lunderline_color, SLOT(setEnabled(bool)));
-	QObject::connect(m_active_ctrl_click, SIGNAL(toggled(bool)),
-									 m_remove_cursor_if_only_click, SLOT(setEnabled(bool)));
+  QObject::connect(
+    w.selection.color, SIGNAL(changed(QColor)),
+    this, SLOT(slotChanged()));
+  QObject::connect(
+    w.selection.underline_color, SIGNAL(changed(QColor)),
+    this, SLOT(slotChanged()));
+  QObject::connect(
+    w.selection.underline_style, SIGNAL(currentIndexChanged(int)),
+    this, SLOT(slotChanged()));
+  QObject::connect(
+    w.selection.active_ctrl_click, SIGNAL(stateChanged(int)),
+    this, SLOT(slotChanged()));
+
+  QObject::connect(
+    w.cursor.underline_style, SIGNAL(currentIndexChanged(int)),
+    this, SLOT(underlineStyleCursorChanged(int)));
+
+  QObject::connect(
+    w.selection.underline_style, SIGNAL(currentIndexChanged(int)),
+    this, SLOT(underlineStyleSelectionChanged(int)));
+
+  QObject::connect(
+    w.cursor.active_ctrl_click, SIGNAL(toggled(bool)),
+    w.cursor.remove_cursor_if_only_click, SLOT(setEnabled(bool)));
 }
 
 MultiCursorConfig::~MultiCursorConfig()
 {
 }
 
-// void MultiCursorConfig::underlineStyleindexChanged(int index)
-// {
-// 	underline_frame.setEnabled(index);
-// }
+void MultiCursorConfig::underlineStyleCursorChanged(int index)
+{
+  w.cursor.underline_color->setEnabled(index);
+  w.cursor.underline_color_label->setEnabled(index);
+}
+
+void MultiCursorConfig::underlineStyleSelectionChanged(int index)
+{
+  w.selection.underline_color->setEnabled(index);
+  w.selection.underline_color_label->setEnabled(index);
+}
 
 void MultiCursorConfig::save()
 {
-	if (MultiCursorPlugin::self())
-	{
-		MultiCursorPlugin * self = MultiCursorPlugin::self();
-		self->setCursorBrush(m_cursor_color->color());
-		int index = m_underline_style->currentIndex();
-		self->setUnderlineStyle(QTextCharFormat::UnderlineStyle(index));
-		self->setUnderlineColor(m_underline_color->color());
-		self->setActiveCtrlClick(m_active_ctrl_click->isChecked(), m_remove_cursor_if_only_click->isChecked());
-		self->writeConfig();
-	}
-	else
-	{
-		KConfigGroup cg(KGlobal::config(), "MultiCursor Plugin");
-		cg.writeEntry("cursor_color", m_cursor_color->color());
-		cg.writeEntry("underline_style", m_underline_style->currentIndex());
-		cg.writeEntry("underline_color", m_underline_color->text());
-		cg.writeEntry("active_ctrl_click", m_active_ctrl_click->isChecked());
-		cg.writeEntry("remove_cursor_if_only_click", m_remove_cursor_if_only_click->isChecked());
-	}
-	emit changed(false);
+  if (MultiCursorPlugin::self())
+  {
+    qDebug() << "color: " << w.cursor.color->color();
+    qDebug() << "bg: " << w.selection.color->color();
+    MultiCursorPlugin * self = MultiCursorPlugin::self();
+    self->setCursorBrush(w.cursor.color->color());
+    self->setCursorUnderlineStyle(QTextCharFormat::UnderlineStyle(
+      w.cursor.underline_style->currentIndex()));
+    self->setCursorUnderlineColor(w.cursor.underline_color->color());
+
+    self->setActiveCursorCtrlClick(
+      w.cursor.active_ctrl_click->isChecked(),
+      w.cursor.remove_cursor_if_only_click->isChecked());
+    self->writeConfig();
+
+    self->setSelectionBrush(w.selection.color->color());
+    self->setSelectionUnderlineStyle(QTextCharFormat::UnderlineStyle(
+      w.selection.underline_style->currentIndex()));
+    self->setSelectionUnderlineColor(w.selection.underline_color->color());
+
+    self->setActiveSelectionCtrlClick(
+      w.selection.active_ctrl_click->isChecked());
+  }
+  else
+  {
+    KConfigGroup cg(KGlobal::config(), "MultiCursor Plugin");
+    cg.writeEntry("cursor_color", w.cursor.color->color());
+    cg.writeEntry("underline_style", w.cursor.underline_style->currentIndex());
+    cg.writeEntry("underline_color", w.cursor.underline_color->text());
+
+    cg.writeEntry(
+      "active_ctrl_click",
+      w.cursor.active_ctrl_click->isChecked());
+    cg.writeEntry(
+      "remove_cursor_if_only_click",
+      w.cursor.remove_cursor_if_only_click->isChecked());
+
+    cg.writeEntry("bg_selection", w.selection.color->color());
+    cg.writeEntry(
+      "underline_style_selection" ,
+      w.selection.underline_style->currentIndex());
+    cg.writeEntry(
+      "underline_color_selection",
+      w.selection.underline_color->text());
+  }
+  emit changed(false);
 }
 
 void MultiCursorConfig::load()
 {
-	if (MultiCursorPlugin::self())
-	{
-		MultiCursorPlugin * self = MultiCursorPlugin::self();
-		self->readConfig();
-		m_cursor_color->setColor(self->cursorBrush().color());
-		m_underline_color->setColor(self->underlineColor());
-		m_underline_style->setCurrentIndex(self->underlineStyle());
-		m_active_ctrl_click->setChecked(self->activeCtrlClick());
-		m_remove_cursor_if_only_click->setChecked(self->activeRemovedCursorIfOnlyClick());
-	}
-	else
-	{
-		KConfigGroup cg(KGlobal::config(), "MultiCursor Plugin");
-		const MultiCursorPlugin::DefaultValues values;
-		m_cursor_color->setColor(cg.readEntry("cursor_color", values.cursorColor));
-		m_underline_color->setColor(cg.readEntry("underline_color", values.underlineColor));
-		m_underline_style->setCurrentIndex(cg.readEntry("underline_style", values.underlineStyle));
-		m_remove_cursor_if_only_click->setChecked(cg.readEntry("remove_cursor_if_only_click" , values.activeCtrlClick));
-		m_active_ctrl_click->setChecked(cg.readEntry("active_ctrl_click" , values.activeCtrlClick));
-	}
-	emit changed(false);
+  if (MultiCursorPlugin::self())
+  {
+    MultiCursorPlugin * self = MultiCursorPlugin::self();
+    self->readConfig();
+    w.cursor.color->setColor(self->cursorBrush().color());
+    w.cursor.underline_color->setColor(self->cursorUnderlineColor());
+    w.cursor.underline_style->setCurrentIndex(self->cursorUnderlineStyle());
+
+    w.cursor.active_ctrl_click->setChecked(self->activeCursorCtrlClick());
+    w.cursor.remove_cursor_if_only_click->setChecked(
+      self->activeRemovedCursorIfOnlyClick());
+
+    w.selection.color->setColor(self->selectionBrush().color());
+    w.selection.underline_color->setColor(self->selectionUnderlineColor());
+    w.selection.underline_style->setCurrentIndex(
+      self->selectionUnderlineStyle());
+
+    w.selection.active_ctrl_click->setChecked(
+      self->activeSelectionCtrlClick());
+  }
+  else
+  {
+    KConfigGroup cg(KGlobal::config(), "MultiCursor Plugin");
+    const MultiCursorPlugin::DefaultValues values;
+    w.cursor.color->setColor(
+      cg.readEntry("cursor_color", values.cursor.color));
+    w.cursor.underline_color->setColor(
+      cg.readEntry("underline_color", values.cursor.underline_color));
+    w.cursor.underline_style->setCurrentIndex(
+      cg.readEntry("underline_style", int(values.cursor.underline_style)));
+
+    w.cursor.remove_cursor_if_only_click->setChecked(
+      cg.readEntry(
+        "remove_cursor_if_only_click",
+        values.cursor.remove_cursor_if_only_click));
+    w.cursor.active_ctrl_click->setChecked(
+      cg.readEntry("active_ctrl_click", values.cursor.active_ctrl_click));
+
+    w.selection.color->setColor(
+      cg.readEntry("bg_selection", values.selection.color));
+    w.selection.underline_color->setColor(
+      cg.readEntry(
+        "underline_color_selection",
+        values.selection.underline_color));
+    w.selection.underline_style->setCurrentIndex(
+      cg.readEntry(
+        "underline_style_selection",
+        int(values.selection.underline_style)));
+
+    w.selection.active_ctrl_click->setChecked(
+      cg.readEntry(
+        "active_ctrl_click_selection", values.selection.active_ctrl_click));
+  }
+
+  if (!w.cursor.active_ctrl_click->isChecked()) {
+    w.cursor.remove_cursor_if_only_click->setEnabled(false);
+  }
+  if (w.cursor.underline_style->currentIndex() == 0) {
+    w.cursor.underline_color->setEnabled(false);
+    w.cursor.underline_color_label->setEnabled(false);
+  }
+  if (w.selection.underline_style->currentIndex() == 0) {
+    w.selection.underline_color->setEnabled(false);
+    w.selection.underline_color_label->setEnabled(false);
+  }
+
+  emit changed(false);
 }
 
 void MultiCursorConfig::defaults()
 {
-	const MultiCursorPlugin::DefaultValues values;
-	m_cursor_color->setColor(values.cursorColor);
-	m_underline_style->setCurrentIndex(values.underlineStyle);
-	m_underline_color->setColor(values.underlineColor);
-	m_active_ctrl_click->setCheckable(true);
-	m_active_ctrl_click->setChecked(true);
-	emit changed(true);
+  const MultiCursorPlugin::DefaultValues values;
+  w.cursor.color->setColor(values.cursor.color);
+  w.cursor.underline_style->setCurrentIndex(values.cursor.underline_style);
+  w.cursor.underline_color->setColor(values.cursor.underline_color);
+
+  w.cursor.active_ctrl_click->setChecked(values.cursor.active_ctrl_click);
+  w.cursor.remove_cursor_if_only_click->setChecked(
+    values.cursor.remove_cursor_if_only_click);
+
+  w.selection.color->setColor(values.selection.color);
+  w.selection.underline_style->setCurrentIndex(
+    values.selection.underline_style);
+  w.selection.underline_color->setColor(values.selection.underline_color);
+
+  w.selection.active_ctrl_click->setChecked(
+    values.selection.active_ctrl_click);
+
+  emit changed(true);
 }
 
 void MultiCursorConfig::slotChanged()
 {
-	emit changed(true);
+  emit changed(true);
 }
 
 #include "multicursorconfig.moc"

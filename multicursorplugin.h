@@ -37,11 +37,20 @@ class MultiCursorPlugin
 {
 public:
   struct DefaultValues {
-    QColor cursorColor = QColor(0, 0, 0, 40);
-    int underlineStyle = 1;
-    QColor underlineColor = Qt::red;
-    bool activeCtrlClick = true;
-    bool removeCursorIfOnlyClick = false;
+    struct Cursor {
+      QColor color = QColor(0, 0, 0, 0);
+      QTextCharFormat::UnderlineStyle underline_style
+        = QTextCharFormat::SingleUnderline;
+      QColor underline_color = Qt::red;
+      bool active_ctrl_click = true;
+      bool remove_cursor_if_only_click = false;
+    } cursor;
+    struct Selection {
+      QColor color = Qt::lightGray;
+      QTextCharFormat::UnderlineStyle underline_style = QTextCharFormat::NoUnderline;
+      QColor underline_color = Qt::red;
+      bool active_ctrl_click = true;
+    } selection;
   };
 
 public:
@@ -51,42 +60,64 @@ public:
   static MultiCursorPlugin* self()
   { return plugin; }
 
-  void addView (KTextEditor::View *view);
-  void removeView (KTextEditor::View *view);
+  void addView(KTextEditor::View *view);
+  void removeView(KTextEditor::View *view);
 
   void readConfig();
   void writeConfig();
 
-  virtual void readConfig (KConfig *)
-  {};
-  virtual void writeConfig (KConfig *)
-  {};
+  virtual void readConfig(KConfig *)
+  {}
+  virtual void writeConfig(KConfig *)
+  {}
 
   void setCursorBrush(const QBrush& brush)
-  { m_attr->setBackground(brush); }
-  void setUnderlineStyle(QTextCharFormat::UnderlineStyle style)
-  { m_attr->setUnderlineStyle(style); }
-  void setUnderlineColor(const QColor& color)
-  { m_attr->setUnderlineColor(color); }
-  void setActiveCtrlClick(bool active, bool remove_cursor_if_only_click);
+  { m_cursor_attr->setBackground(brush); }
+  void setCursorUnderlineStyle(QTextCharFormat::UnderlineStyle style)
+  { m_cursor_attr->setUnderlineStyle(style); }
+  void setCursorUnderlineColor(const QColor& color)
+  { m_cursor_attr->setUnderlineColor(color); }
+
+  void setActiveCursorCtrlClick(bool active, bool remove_cursor_if_only_click);
+
+  void setSelectionBrush(const QBrush& brush)
+  { m_selection_attr->setBackground(brush); }
+  void setSelectionUnderlineStyle(QTextCharFormat::UnderlineStyle style)
+  { m_selection_attr->setUnderlineStyle(style); }
+  void setSelectionUnderlineColor(const QColor& color)
+  { m_selection_attr->setUnderlineColor(color); }
+
+  void setActiveSelectionCtrlClick(bool active);
+
 
   QBrush cursorBrush() const
-  { return m_attr->background(); }
-  QTextCharFormat::UnderlineStyle underlineStyle() const
-  { return m_attr->underlineStyle(); }
-  QColor underlineColor() const
-  { return m_attr->underlineColor(); }
-  bool activeCtrlClick() const
-  { return m_active_ctrl_click; }
+  { return m_cursor_attr->background(); }
+  QTextCharFormat::UnderlineStyle cursorUnderlineStyle() const
+  { return m_cursor_attr->underlineStyle(); }
+  QColor cursorUnderlineColor() const
+  { return m_cursor_attr->underlineColor(); }
+  bool activeCursorCtrlClick() const
+  { return m_active_cursor_ctrl_click; }
   bool activeRemovedCursorIfOnlyClick() const
   { return m_remove_cursor_if_only_click; }
+
+  QBrush selectionBrush() const
+  { return m_selection_attr->background(); }
+  QTextCharFormat::UnderlineStyle selectionUnderlineStyle() const
+  { return m_selection_attr->underlineStyle(); }
+  QColor selectionUnderlineColor() const
+  { return m_selection_attr->underlineColor(); }
+  bool activeSelectionCtrlClick() const
+  { return m_active_selection_ctrl_click; }
 
 private:
   static MultiCursorPlugin *plugin;
   QList<MultiCursorView*> m_views;
-  KTextEditor::Attribute::Ptr m_attr;
+  KTextEditor::Attribute::Ptr m_cursor_attr;
+  KTextEditor::Attribute::Ptr m_selection_attr;
+  bool m_active_cursor_ctrl_click;
   bool m_remove_cursor_if_only_click;
-  bool m_active_ctrl_click;
+  bool m_active_selection_ctrl_click;
 };
 
 K_PLUGIN_FACTORY_DECLARATION(MultiCursorPluginFactory)
