@@ -15,8 +15,8 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef MCURSORS_CONFIG_H
-#define MCURSORS_CONFIG_H
+#ifndef MULTICURSOR_CONFIG_H
+#define MULTICURSOR_CONFIG_H
 
 #include <KCModule>
 
@@ -63,4 +63,4 @@ private:
   } w;
 };
 
-#endif // MCURSORS_CONFIG_H
+#endif // MULTICURSOR_CONFIG_H

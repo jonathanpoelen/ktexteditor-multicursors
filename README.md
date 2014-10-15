@@ -1,7 +1,7 @@
-ktexteditor-mcursors
-====================
+ktexteditor-multicursors
+========================
 
-Katepart plugin (Kwrite, Kate, Kdevelop, ...) that adds or deletes virtual cursors in a document.
+Katepart plugin (Kwrite, Kate, Kdevelop, ...) that adds or deletes virtual cursors and virtual selections in a document.
 Any text written or deleted will be repeated on each virtual cursor.
 
 ### Several options are available
