@@ -295,6 +295,10 @@ MultiCursorView::MultiCursorView(
   action->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_P);
   action->setCheckable(true);
 
+  ENTRY("Copy the Lines With a Virtual Cursor", "copy_line_with_cursor", copyLinesWithCursor());
+
+  ENTRY("Cut the Lines With a Virtual Cursor", "cut_line_with_cursor", cutLinesWithCursor());
+
   ENTRY("Extend the Selection to Left", "extend_left_selection", extendLeftSelection());
   action->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_ParenLeft);
 
@@ -523,6 +527,8 @@ void MultiCursorView::setEnabledCursors(bool x)
   collec->action("next_multicursor")->setEnabled(x);
   collec->action("previous_multicursor")->setEnabled(x);
   collec->action("synchronise_multicursor")->setEnabled(x);
+  collec->action("copy_line_with_cursor")->setEnabled(x);
+  collec->action("cut_line_with_cursor")->setEnabled(x);
   collec->action("extend_left_selection")->setEnabled(x);
   collec->action("extend_right_selection")->setEnabled(x);
   collec->action("reduce_left_selection")->setEnabled(x);
@@ -960,6 +966,37 @@ void MultiCursorView::setRange()
       checkRanges();
     }
   }
+}
+
+void MultiCursorView::copyLinesWithCursor()
+{
+  int l = -1;
+  QString s;
+  for(Cursor const & c : m_cursors) {
+    const int l2 = c.line();
+    if (l != l2) {
+      l = l2;
+      s.append(m_document->line(l));
+      s.append('\n');
+    }
+  };
+  QApplication::clipboard()->setText(s);
+}
+
+void MultiCursorView::cutLinesWithCursor()
+{
+  copyLinesWithCursor();
+  stopCursors();
+  int l = m_cursors.back().line();
+  std::for_each(m_cursors.rbegin()+1, m_cursors.rend(), [&](Cursor const & c) {
+    const int l2 = c.line();
+    if (l != l2) {
+      m_document->removeLine(l);
+      l = l2;
+    }
+  });
+  m_document->removeLine(l);
+  m_cursors.clear();
 }
 
 void MultiCursorView::extendLeftSelection()

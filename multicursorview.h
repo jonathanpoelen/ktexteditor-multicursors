@@ -141,6 +141,9 @@ private slots:
   void setSynchronizedCursors();
   void cursorPositionChanged(KTextEditor::View*, const KTextEditor::Cursor&);
 
+  void copyLinesWithCursor();
+  void cutLinesWithCursor();
+
   void extendLeftSelection();
   void extendRightSelection();
   void reduceLeftSelection();
