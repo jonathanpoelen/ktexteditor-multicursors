@@ -773,29 +773,25 @@ bool MultiCursorView::eventFilter(QObject* obj, QEvent* event)
 void MultiCursorView::textInserted(KTextEditor::Document *doc, const KTextEditor::Range &range)
 {
 	if (startEditing()) {
-		insertText(doc->text(range));
+		const QString text = doc->text(range);
+    auto it = lowerBound(m_cursors, m_view->cursorPosition());
+    for (auto first = m_cursors.begin(); first != it; ++first) {
+      m_document->insertText(first->cursor(), text);
+      first->revalid();
+    }
+    auto last = m_cursors.end();
+    if (it != last) {
+      if (m_view->cursorPosition() != it->cursor()) {
+        m_document->insertText(it->cursor(), text);
+        it->revalid();
+      }
+      while (++it != last) {
+        m_document->insertText(it->cursor(), text);
+        it->revalid();
+      }
+    }
 		endEditing();
 	}
-}
-
-void MultiCursorView::insertText(const QString &text)
-{
-  auto it = lowerBound(m_cursors, m_view->cursorPosition());
-  for (auto first = m_cursors.begin(); first != it; ++first) {
-    m_document->insertText(first->cursor(), text);
-    first->revalid();
-  }
-  auto last = m_cursors.end();
-  if (it != last) {
-    if (m_view->cursorPosition() != it->cursor()) {
-      m_document->insertText(it->cursor(), text);
-      it->revalid();
-    }
-    while (++it != last) {
-      m_document->insertText(it->cursor(), text);
-      it->revalid();
-    }
-  }
 }
 
 void MultiCursorView::textRemoved(
@@ -873,9 +869,12 @@ void MultiCursorView::setActiveCursor()
 
 void MultiCursorView::clearRanges()
 {
-  std::for_each(m_ranges.rbegin(), m_ranges.rend()
-  , [this](Range const & r){ m_document->removeText(r.toRange()); });
-  removeAllRanges();
+  if (startEditing(false)) {
+    std::for_each(m_ranges.rbegin(), m_ranges.rend()
+    , [this](Range const & r){ m_document->removeText(r.toRange()); });
+    removeAllRanges();
+    endEditing();
+  }
 }
 
 void MultiCursorView::copyRanges()
@@ -899,13 +898,16 @@ void MultiCursorView::cutRanges()
 
 void MultiCursorView::pasteRanges()
 {
-  const QString text = QApplication::clipboard()->text();
-  std::for_each(m_ranges.rbegin(), m_ranges.rend()
-  , [this, &text](Range const & r){
-    KTextEditor::Range range = r.toRange();
-    m_document->insertText(r.end(), text);
-    m_document->removeText(range);
-  });
+  if (startEditing(false)) {
+    const QString text = QApplication::clipboard()->text();
+    std::for_each(m_ranges.rbegin(), m_ranges.rend()
+    , [this, &text](Range const & r){
+      KTextEditor::Range range = r.toRange();
+      m_document->insertText(r.end(), text);
+      m_document->removeText(range);
+    });
+    endEditing();
+  }
 }
 
 void MultiCursorView::setRange()
@@ -989,26 +991,25 @@ void MultiCursorView::copyLinesWithCursor()
 void MultiCursorView::cutLinesWithCursor()
 {
   copyLinesWithCursor();
-  stopCursors();
-  int l = m_cursors.back().line();
-  std::for_each(m_cursors.rbegin()+1, m_cursors.rend(), [&](Cursor const & c) {
-    const int l2 = c.line();
-    if (l != l2) {
-      m_document->removeLine(l);
-      l = l2;
-    }
-  });
-  m_document->removeLine(l);
-  m_cursors.clear();
+  if (startEditing(false)) {
+    stopCursors();
+    int l = m_cursors.back().line();
+    std::for_each(m_cursors.rbegin()+1, m_cursors.rend(), [&](Cursor const & c) {
+      const int l2 = c.line();
+      if (l != l2) {
+        m_document->removeLine(l);
+        l = l2;
+      }
+    });
+    m_document->removeLine(l);
+    m_cursors.clear();
+    endEditing();
+  }
 }
 
 void MultiCursorView::pasteLinesOnCursors()
 {
-  if (m_document->startEditing()) {
-    if (m_is_synchronized_cursor) {
-      actionCollection()->action("synchronise_multicursor")->trigger();
-    }
-    m_has_exclusive_edit = true;
+  if (startEditing(false)) {
     QString s = QApplication::clipboard()->text();
     if (!s.isEmpty()) {
       int i = 0;
@@ -1178,9 +1179,11 @@ void MultiCursorView::removeRangesOnline()
   }
 }
 
-bool MultiCursorView::startEditing()
+bool MultiCursorView::startEditing(bool check_active)
 {
-  if (!m_is_active || m_has_exclusive_edit || !m_document->startEditing()) {
+  if ((check_active && !m_is_active)
+   || m_has_exclusive_edit
+   || !m_document->startEditing()) {
     return false;
   }
   if (m_is_synchronized_cursor) {

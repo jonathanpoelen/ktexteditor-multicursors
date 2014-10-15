@@ -166,8 +166,7 @@ private slots:
 
 private:
   bool endEditing();
-  bool startEditing();
-  void insertText(const QString &text);
+  bool startEditing(bool check_active = true);
 
   bool eventFilter(QObject *obj, QEvent *ev);
 
