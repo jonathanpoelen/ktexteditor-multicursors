@@ -143,6 +143,7 @@ private slots:
 
   void copyLinesWithCursor();
   void cutLinesWithCursor();
+  void pasteLinesOnCursors();
 
   void extendLeftSelection();
   void extendRightSelection();

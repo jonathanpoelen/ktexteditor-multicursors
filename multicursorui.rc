@@ -1,5 +1,5 @@
 <!DOCTYPE kpartgui>
-<kpartplugin name="ktexteditor_multicursor" library="ktexteditor_multicursor" version="10">
+<kpartplugin name="ktexteditor_multicursor" library="ktexteditor_multicursor" version="11">
 <MenuBar>
 	<Menu name="tools"><!--<Text>&amp;Tools</Text>-->
 		<separator group="tools_multicursor"/>
@@ -14,9 +14,10 @@
       <Action name="next_multicursor" group="multicursor"/>
 			<Action name="previous_multicursor" group="multicursor"/>
       <separator group="tools_move_multicursor"/>
-      <Action name="copy_line_with_cursor" group="multicursor"/>
       <Action name="cut_line_with_cursor" group="multicursor"/>
-      <separator group="tools_copy_cut_line_multicursor"/>
+      <Action name="copy_line_with_cursor" group="multicursor"/>
+      <Action name="paste_line_with_cursor" group="multicursor"/>
+      <separator group="tools_copy_paste_line_multicursor"/>
       <Action name="extend_left_selection" group="multicursor"/>
       <Action name="extend_right_selection" group="multicursor"/>
       <Action name="reduce_left_selection" group="multicursor"/>

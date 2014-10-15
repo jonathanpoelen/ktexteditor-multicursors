@@ -146,7 +146,7 @@ struct MultiCursorView::CursorListDetail
         ++prev;
       }
     }
-    for (Cursor& c: cursors) {
+    for (Cursor & c : cursors) {
       c.revalid();
     }
   }
@@ -298,6 +298,8 @@ MultiCursorView::MultiCursorView(
   ENTRY("Copy the Lines With a Virtual Cursor", "copy_line_with_cursor", copyLinesWithCursor());
 
   ENTRY("Cut the Lines With a Virtual Cursor", "cut_line_with_cursor", cutLinesWithCursor());
+
+  ENTRY("Paste the Lines on a Virtual Cursor", "paste_line_with_cursor", pasteLinesOnCursors());
 
   ENTRY("Extend the Selection to Left", "extend_left_selection", extendLeftSelection());
   action->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_ParenLeft);
@@ -529,6 +531,7 @@ void MultiCursorView::setEnabledCursors(bool x)
   collec->action("synchronise_multicursor")->setEnabled(x);
   collec->action("copy_line_with_cursor")->setEnabled(x);
   collec->action("cut_line_with_cursor")->setEnabled(x);
+  collec->action("paste_line_with_cursor")->setEnabled(x);
   collec->action("extend_left_selection")->setEnabled(x);
   collec->action("extend_right_selection")->setEnabled(x);
   collec->action("reduce_left_selection")->setEnabled(x);
@@ -999,6 +1002,29 @@ void MultiCursorView::cutLinesWithCursor()
   m_cursors.clear();
 }
 
+void MultiCursorView::pasteLinesOnCursors()
+{
+  if (m_document->startEditing()) {
+    if (m_is_synchronized_cursor) {
+      actionCollection()->action("synchronise_multicursor")->trigger();
+    }
+    m_has_exclusive_edit = true;
+    QString s = QApplication::clipboard()->text();
+    if (!s.isEmpty()) {
+      int i = 0;
+      for (Cursor & c : m_cursors) {
+        const int i2 = s.indexOf('\n', i);
+        m_document->insertText(c.cursor(), s.mid(i, i2-i));
+        i = i2 + 1;
+        if (i2 == -1) {
+          break;
+        }
+      }
+    }
+    endEditing();
+  }
+}
+
 void MultiCursorView::extendLeftSelection()
 {
   if (m_view->selection()) {
@@ -1154,17 +1180,22 @@ void MultiCursorView::removeRangesOnline()
 
 bool MultiCursorView::startEditing()
 {
-	if (!m_is_active || m_has_exclusive_edit || !m_document->startEditing())
-		return false;
-	if (m_is_synchronized_cursor)
-		actionCollection()->action("synchronise_multicursor")->trigger();
-	return m_has_exclusive_edit = true;
+  if (!m_is_active || m_has_exclusive_edit || !m_document->startEditing()) {
+    return false;
+  }
+  if (m_is_synchronized_cursor) {
+    actionCollection()->action("synchronise_multicursor")->trigger();
+  }
+  return m_has_exclusive_edit = true;
 }
 
 bool MultiCursorView::endEditing()
 {
-	m_has_exclusive_edit = false;
-	return m_document->endEditing();
+  m_has_exclusive_edit = false;
+  if (m_is_synchronized_cursor) {
+    actionCollection()->action("synchronise_multicursor")->trigger();
+  }
+  return m_document->endEditing();
 }
 
 KTextEditor::MovingRange* MultiCursorView::newMovingCursor(
