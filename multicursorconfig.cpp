@@ -26,6 +26,7 @@
 #include <QtGui/QBoxLayout>
 #include <QtGui/QCheckBox>
 #include <QtGui/QLabel>
+#include <QtGui/QGroupBox>
 
 namespace {
   template<class Ws>
@@ -62,7 +63,12 @@ namespace {
 MultiCursorConfig::MultiCursorConfig(QWidget *parent, const QVariantList &args)
 : KCModule(MultiCursorPluginFactory::componentData(), parent, args)
 {
-  QVBoxLayout * layout = new QVBoxLayout(this);
+  QVBoxLayout * glayout = new QVBoxLayout(this);
+  QGroupBox * group = new QGroupBox(this);
+  group->setTitle(i18n("Virtual cursor"));
+  QVBoxLayout * layout = new QVBoxLayout(group);
+  group->setLayout(layout);
+  glayout->addWidget(group);
 
   build_widget_decoration(this, layout, w.cursor);
 
@@ -74,13 +80,19 @@ MultiCursorConfig::MultiCursorConfig(QWidget *parent, const QVariantList &args)
     = new QCheckBox(i18n("Removing all cursors on click without Ctrl"), this);
   layout->addWidget(w.cursor.remove_cursor_if_only_click);
 
+  group = new QGroupBox(this);
+  group->setTitle(i18n("Virtual selection"));
+  layout = new QVBoxLayout(group);
+  group->setLayout(layout);
+  glayout->addWidget(group);
+
   build_widget_decoration(this, layout, w.selection);
 
   w.selection.active_ctrl_click
     = new QCheckBox(i18n("Set selection with Ctrl+Click"), this);
   layout->addWidget(w.selection.active_ctrl_click);
 
-  setLayout(layout);
+  setLayout(glayout);
 
   //load();
 
