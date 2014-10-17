@@ -45,28 +45,21 @@ lowerBound(Cont & cont, const T & x, Compare comp)
 
 struct MultiCursorView::CursorListDetail
 {
-	template<typename Predicate>
-	static CursorList::iterator
-	move_line(KTextEditor::Document* doc, CursorList& cont, Predicate predicate,
-						CursorList::iterator first, int line)
-	{
-		int pl = -1;
-		int pc = -1;
-		CursorList::iterator last = cont.end();
-		while (first != last && predicate(*first)) {
-			int l = first->line() + line;
-			int c = std::min(first->column(), doc->lineLength(l));
-			if (l == pl && c == pc) {
-				first = cont.erase(first);
-				continue ;
-			}
-			first->setCursor(l, c);
-			pl = l;
-			pc = c;
-			++first;
-		}
-		return first;
-	}
+  template<class RemoveIf>
+  static void moveColumn(CursorList & cursors, int column, RemoveIf pred)
+  {
+    cursors.erase(std::remove_if(
+      cursors.begin(), cursors.end()
+    , [column, pred](Cursor & c) {
+      const int line = c.line();
+      const int col = c.column();
+      if (pred(line, col, column)) {
+        return true;
+      }
+      c.setCursor(line, col + column);
+      return false;
+    }), cursors.end());
+  }
 
   static KTextEditor::Cursor
   recoil(
@@ -397,41 +390,52 @@ void MultiCursorView::textDelete()
     }\
   } while (0)
 
-#define SIGNALMAN_CURSORS_SYNCHRONISE(F)\
+#define SIGNALMAN_CURSORS_SYNCHRONIZE(F)\
   SIGNALMAN_OBJECT(m_view, F, cursorPositionChanged(KTextEditor::View*,KTextEditor::Cursor))
 
 void MultiCursorView::connectCursors()
 {
   SIGNALMAN_CURSORS(connect);
-  if (m_is_synchronized_cursor) {
-    SIGNALMAN_CURSORS_SYNCHRONISE(connect);
-  }
+  connectSynchronizedCursors();
 }
 
 void MultiCursorView::disconnectCursors()
 {
   SIGNALMAN_CURSORS(disconnect);
-  if (m_is_synchronized_cursor) {
-    SIGNALMAN_CURSORS_SYNCHRONISE(disconnect);
-  }
+  disconnectSynchronizedCursors();
 }
 
 #undef SIGNALMAN_CURSORS
 #undef SIGNALMAN_CHECK_VAR
 
+void MultiCursorView::connectSynchronizedCursors()
+{
+  if (m_is_synchronized_cursor) {
+    SIGNALMAN_CURSORS_SYNCHRONIZE(connect);
+    m_previous_position = m_view->cursorPosition();
+  }
+}
+
+void MultiCursorView::disconnectSynchronizedCursors()
+{
+  if (m_is_synchronized_cursor) {
+    SIGNALMAN_CURSORS_SYNCHRONIZE(disconnect);
+  }
+}
+
 void MultiCursorView::setSynchronizedCursors()
 {
   if (m_is_synchronized_cursor) {
     m_is_synchronized_cursor = false;
-    SIGNALMAN_CURSORS_SYNCHRONISE(disconnect);
+    SIGNALMAN_CURSORS_SYNCHRONIZE(disconnect);
   } else {
     m_is_synchronized_cursor = true;
-    m_cursor = m_view->cursorPosition();
-    SIGNALMAN_CURSORS_SYNCHRONISE(connect);
+    m_previous_position = m_view->cursorPosition();
+    SIGNALMAN_CURSORS_SYNCHRONIZE(connect);
   }
 }
 
-#undef SIGNALMAN_CURSORS_SYNCHRONISE
+#undef SIGNALMAN_CURSORS_SYNCHRONIZE
 
 #define SIGNALMAN_OBJECT(O, F, P) F(O, SIGNAL(P), this, SLOT(P))
 #define SIGNALMAN_DOC(F, P) SIGNALMAN_OBJECT(m_document, F, P)
@@ -540,83 +544,70 @@ void MultiCursorView::setEnabledCursors(bool x)
 
 void MultiCursorView::cursorPositionChanged(KTextEditor::View*, const KTextEditor::Cursor& cursor)
 {
-	int l1 = m_cursor.line();
-	int l2 = cursor.line();
-	const int line = l2-l1;
-	const int c1 = m_cursor.column();
-	const int c2 = cursor.column();
-	const int column = c2-c1;
+  const int line = cursor.line() - m_previous_position.line();
+  const int column = cursor.column() - m_previous_position.column();
 
-	m_cursor = cursor;
+  m_previous_position = cursor;
 
-	if (0 == line && 0 == column)
-		return ;
+  if (0 == line && 0 == column) {
+    return ;
+  }
 
-	if (0 == column && line < 0) {
-        auto pred = [](Cursor & c, int line) { return c.line() != line; };
-        auto first = lowerBound(m_cursors, -line, pred);
-        first = m_cursors.erase(m_cursors.begin(), first);
-        CursorListDetail::move_line(m_document, m_cursors, [](Cursor&){return true;}, first, line);
-	}
-	else if (0 == column && line > 0) {
-		int last_line = m_document->lines();
-		m_cursors.erase(
-			CursorListDetail::move_line(
-				m_document, m_cursors,
-				[line, last_line](Cursor& cur){
-					return cur.line() + line < last_line;
-				},
-				m_cursors.begin(),
-				line
-			),
-			m_cursors.end()
-		);
-	}
-	else if (line < 0 || (line == 0 && column < 0)) {
-		int n = line ? c1 + m_document->lineLength(l2) - c2 + line + 2 : -column;
-		while (++l2 < l1) {
-			n += m_document->lineLength(l2);
-		}
-		CursorList::iterator first = m_cursors.begin();
-		CursorList::iterator last = m_cursors.end();
-		for (; first != last; ++first) {
-			KTextEditor::Cursor cur
-              = CursorListDetail::recoil(m_document, first->cursor(), n, -1);
-			if (cur.isValid()) {
-				first->setCursor(cur);
-				break;
-			}
-		}
-		first = m_cursors.erase(m_cursors.begin(), first);
-        if (first != last) {
-            while (++first != last) {
-              first->setCursor(
-                CursorListDetail::recoil(m_document, first->cursor(), n, -1)
-              );
-            }
+  if (0 == column) {
+    auto end = m_cursors.end();
+    // move to top
+    if (line < 0) {
+      auto first = lowerBound(m_cursors, -line
+      , [](Cursor const & c, int l) { return c.line() < l; });
+      if (first != end) {
+        auto res = m_cursors.begin();
+        res->setCursor(first->line() + line, first->column());
+        while (++first != end) {
+          first->setCursor(first->line() + line, first->column());
+          if (!(*res == *first)) {
+            ++res;
+            *res = std::move(*first);
+          }
         }
-	}
-	else {
-		int n = line ? c2 + m_document->lineLength(l1) - (c1 + line) + 2 : column;
-		while (++l1 < l2) {
-			n += m_document->lineLength(l1);
-		}
-		CursorList::iterator first = m_cursors.begin();
-		CursorList::iterator last = m_cursors.end();
-		const int lines = m_document->lines() + 1;
-		KTextEditor::Cursor docend = m_document->documentEnd();
-		for (; first != last; ++first) {
-			KTextEditor::Cursor cur
-              = CursorListDetail::advance(m_document, first->cursor(), n, lines);
-			if (cur > docend) {
-				break;
-			}
-			first->setCursor(cur);
-		}
-		m_cursors.erase(first, last);
-	}
-
-	checkCursors();
+        m_cursors.erase(++res, end);
+        checkCursors();
+      }
+      else {
+        m_cursors.clear();
+        stopCursors();
+      }
+    }
+    // move to bottom
+    else {
+      auto first = m_cursors.begin();
+      int lmax = m_document->lines() - line;
+      for (; first != end; ++first) {
+        if (lmax < first->line()) {
+          break;
+        }
+        first->setCursor(first->line() + line, first->column());
+      }
+      m_cursors.erase(std::unique(m_cursors.begin(), first), end);
+      checkCursors();
+    }
+  }
+  else if (0 == line) {
+    // move to left
+    if (column < 0) {
+      CursorListDetail::moveColumn(m_cursors, column
+      , [](int, int column, int move_column) {
+        return column + move_column < 0;
+      });
+    }
+    // move to right
+    else {
+      CursorListDetail::moveColumn(m_cursors, column
+      , [this](int line, int column, int move_column) {
+        return m_document->lineLength(line) <= column + move_column;
+      });
+    }
+    checkCursors();
+  }
 }
 
 void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
@@ -1186,18 +1177,14 @@ bool MultiCursorView::startEditing(bool check_active)
    || !m_document->startEditing()) {
     return false;
   }
-  if (m_is_synchronized_cursor) {
-    actionCollection()->action("synchronise_multicursor")->trigger();
-  }
+  disconnectSynchronizedCursors();
   return m_has_exclusive_edit = true;
 }
 
 bool MultiCursorView::endEditing()
 {
   m_has_exclusive_edit = false;
-  if (m_is_synchronized_cursor) {
-    actionCollection()->action("synchronise_multicursor")->trigger();
-  }
+  connectSynchronizedCursors();
   return m_document->endEditing();
 }
 

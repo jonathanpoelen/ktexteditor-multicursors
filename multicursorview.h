@@ -80,6 +80,12 @@ private:
     bool operator<(const KTextEditor::Cursor& cursor) const
     { return this->cursor() < cursor; }
 
+    bool operator==(const Cursor& other) const
+    { return this->cursor() == other.cursor(); }
+
+    bool operator<(const Cursor& other) const
+    { return this->cursor() < other.cursor(); }
+
     friend bool operator<(const KTextEditor::Cursor& c1, const Cursor & c2)
     { return c1 < c2.cursor(); }
 
@@ -174,6 +180,8 @@ private:
 
   void connectCursors();
   void disconnectCursors();
+  void connectSynchronizedCursors();
+  void disconnectSynchronizedCursors();
   void startCursors();
   void stopCursors();
   void checkCursors();
@@ -207,7 +215,7 @@ private:
   KTextEditor::MovingInterface *m_smart;
   KTextEditor::Attribute::Ptr m_cursor_attr;
   KTextEditor::Attribute::Ptr m_selection_attr;
-  KTextEditor::Cursor m_cursor;
+  KTextEditor::Cursor m_previous_position;
   CursorList m_cursors;
   RangeList m_ranges;
   bool m_has_exclusive_edit;
