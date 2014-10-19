@@ -119,6 +119,9 @@ private:
     const KTextEditor::Range toRange() const
     { return m_range->toRange(); }
 
+    bool isEmpty() const
+    { return m_range->isEmpty(); }
+
   private:
     std::unique_ptr<KTextEditor::MovingRange> m_range;
   };
@@ -180,6 +183,23 @@ private slots:
   void moveToNextEndRange();
   void moveToPreviousEndRange();
 
+  void cursorsToRanges();
+
+  void setSynchronizedRanges();
+
+  void selectLineUp();
+  void selectLineDown();
+  void selectCharRight();
+  void selectCharLeft();
+
+  void selectPageUp();
+  void selectPageDown();
+  void selectBeginningOfLine();
+  void selectEndOfLine();
+  void selectMatchingBracket();
+  void selectWordRight();
+  void selectWordLeft();
+
 private:
   bool endEditing();
   bool startEditing(bool check_active = true);
@@ -199,6 +219,8 @@ private:
 
   void connectRanges();
   void disconnectRanges();
+  void connectSynchronizedRanges();
+  void disconnectSynchronizedRanges();
   void startRanges();
   void stopRanges();
   void checkRanges();
@@ -230,6 +252,7 @@ private:
   bool m_has_exclusive_edit;
   bool m_is_active;
   bool m_is_synchronized_cursor;
+  bool m_is_synchronized_selection;
   bool m_remove_cursor_if_only_click;
   bool m_has_cursor_ctrl;
   bool m_has_selection_ctrl;

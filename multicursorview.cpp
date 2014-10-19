@@ -281,6 +281,7 @@ MultiCursorView::MultiCursorView(
 , m_has_exclusive_edit(false)
 , m_is_active(true)
 , m_is_synchronized_cursor(false)
+, m_is_synchronized_selection(false)
 , m_remove_cursor_if_only_click(false)
 , m_has_cursor_ctrl(false)
 , m_has_selection_ctrl(false)
@@ -371,6 +372,9 @@ MultiCursorView::MultiCursorView(
   ENTRY("Move to Next Virtual Selection End", "next_end_multiselection", moveToNextEndRange());
 
   ENTRY("Move to Previous Virtual Selection End", "previous_end_multiselection", moveToPreviousEndRange());
+
+  ENTRY("Synchronize With the Selection", "synchronise_multiselection", setSynchronizedRanges());
+  action->setCheckable(true);
 
 #undef ENTRY
 
@@ -531,6 +535,62 @@ void MultiCursorView::disconnectRanges()
 #undef SIGNALMAN_CHECK_VAR
 #undef SIGNALMAN_OBJECT
 #undef SIGNALMAN_DOC
+
+void MultiCursorView::connectSynchronizedRanges()
+{
+// TODO
+  KActionCollection* collec = m_view->actionCollection();
+  connect(
+    collec->action("select_line_up"), SIGNAL(triggered(bool)),
+    this, SLOT(selectLineUp()));
+  connect(
+    collec->action("select_line_down"), SIGNAL(triggered(bool)),
+    this, SLOT(selectLineDown()));
+  connect(
+    collec->action("select_char_left"), SIGNAL(triggered(bool)),
+    this, SLOT(selectCharLeft()));
+  connect(
+    collec->action("select_char_right"), SIGNAL(triggered(bool)),
+    this, SLOT(selectCharRight()));
+  connect(
+    collec->action("select_word_left"), SIGNAL(triggered(bool)),
+    this, SLOT(selectWordLeft()));
+  connect(
+    collec->action("select_word_right"), SIGNAL(triggered(bool)),
+    this, SLOT(selectWordRight()));
+  connect(
+    collec->action("select_beginning_of_line"), SIGNAL(triggered(bool)),
+    this, SLOT(selectBeginningOfLine()));
+  connect(
+    collec->action("select_end_of_line"), SIGNAL(triggered(bool)),
+    this, SLOT(selectEndOfLine()));
+  connect(
+    collec->action("select_matching_bracket"), SIGNAL(triggered(bool)),
+    this, SLOT(selectMatchingBracket()));
+  connect(
+    collec->action("select_page_up"), SIGNAL(triggered(bool)),
+    this, SLOT(selectPageUp()));
+  connect(
+    collec->action("select_page_down"), SIGNAL(triggered(bool)),
+    this, SLOT(selectPageDown()));
+}
+
+void MultiCursorView::disconnectSynchronizedRanges()
+{
+// TODO
+
+}
+
+void MultiCursorView::setSynchronizedRanges()
+{
+  if (m_is_synchronized_selection) {
+    m_is_synchronized_selection = false;
+    disconnectSynchronizedRanges();
+  } else {
+    m_is_synchronized_selection = true;
+    connectSynchronizedRanges();
+  }
+}
 
 void MultiCursorView::stopCursors()
 {
@@ -734,6 +794,179 @@ void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
   }
 }
 
+void MultiCursorView::cursorsToRanges()
+{
+// TODO
+
+}
+
+void MultiCursorView::selectLineUp()
+{
+  RangeList ranges(std::move(m_ranges));
+  m_ranges.reserve(ranges.size());
+  if (m_view->selection()
+   && m_view->selectionRange().start() == m_view->cursorPosition()) {
+    for (Range & r : ranges) {
+      auto const & cstart = r.start();
+      const int line = std::max(cstart.line() - 1, 0);
+      KTextEditor::Cursor c(line, cstart.column());
+      setRange(KTextEditor::Range(c, r.end()), false);
+    }
+  }
+  else {
+    for (Range & r : ranges) {
+      auto const & cend = r.end();
+      const int cline = cend.line();
+      const int line = std::max(cline - 1, 0);
+      KTextEditor::Cursor c(line, cend.column());
+      setRange(KTextEditor::Range(r.start(), c), false);
+    }
+  }
+}
+
+void MultiCursorView::selectLineDown()
+{
+  RangeList ranges(std::move(m_ranges));
+  m_ranges.reserve(ranges.size());
+  if (m_view->selection()
+   && m_view->selectionRange().end() == m_view->cursorPosition()) {
+    for (Range & r : ranges) {
+      auto const & cend = r.end();
+      const int cline = cend.line();
+      const int line = std::min(cline + 1, m_document->lineLength(cline));
+      KTextEditor::Cursor c(line, cend.column());
+      setRange(KTextEditor::Range(r.start(), c), false);
+    }
+  }
+  else {
+    for (Range & r : ranges) {
+      auto const & cstart = r.start();
+      const int cline = cstart.line();
+      const int line = std::min(cline + 1, m_document->lineLength(cline));
+      KTextEditor::Cursor c(line, cstart.column());
+      setRange(KTextEditor::Range(c, r.end()), false);
+    }
+  }
+}
+
+void MultiCursorView::selectCharRight()
+{
+  RangeList ranges(std::move(m_ranges));
+  m_ranges.reserve(ranges.size());
+  const int linemax = m_document->lines();
+  if (m_view->selection()
+   && m_view->selectionRange().end() == m_view->cursorPosition()) {
+    for (Range & r : ranges) {
+      auto const & cend = r.end();
+      const int cline = cend.line();
+      const int ccolumn = cend.column();
+      if (ccolumn + 1 < m_document->lineLength(cline)) {
+        KTextEditor::Cursor c(cline, ccolumn + 1);
+        setRange(KTextEditor::Range(r.start(), c), false);
+      }
+      else if (linemax != cline + 1) {
+        KTextEditor::Cursor c(cline + 1, 0);
+        setRange(KTextEditor::Range(r.start(), c), false);
+      }
+    }
+  }
+  else {
+    for (Range & r : ranges) {
+      auto const & cstart = r.start();
+      const int cline = cstart.line();
+      const int ccolumn = cstart.column();
+      if (ccolumn + 1 != m_document->lineLength(cline)) {
+        KTextEditor::Cursor c(cline, ccolumn + 1);
+        setRange(KTextEditor::Range(c, r.end()), false);
+      }
+      else if (linemax != cline + 1) {
+        KTextEditor::Cursor c(cline + 1, 0);
+        setRange(KTextEditor::Range(c, r.end()), false);
+      }
+    }
+  }
+}
+
+void MultiCursorView::selectCharLeft()
+{
+  RangeList ranges(std::move(m_ranges));
+  m_ranges.reserve(ranges.size());
+  if (m_view->selection()
+   && m_view->selectionRange().start() == m_view->cursorPosition()) {
+    for (Range & r : ranges) {
+      auto const & cstart = r.start();
+      const int cline = cstart.line();
+      const int ccolumn = cstart.column();
+      if (ccolumn != 0) {
+        KTextEditor::Cursor c(cline, ccolumn - 1);
+        setRange(KTextEditor::Range(c, r.end()), false);
+      }
+      else if (cline != 0) {
+        KTextEditor::Cursor c(cline - 1, m_document->lineLength(cline));
+        setRange(KTextEditor::Range(c, r.end()), false);
+      }
+    }
+  }
+  else {
+    for (Range & r : ranges) {
+      auto const & cstart = r.end();
+      const int cline = cstart.line();
+      const int ccolumn = cstart.column();
+      if (ccolumn != 0) {
+        KTextEditor::Cursor c(cline, ccolumn - 1);
+        setRange(KTextEditor::Range(r.start(), c), false);
+      }
+      else if (cline) {
+        KTextEditor::Cursor c(cline - 1, m_document->lineLength(cline));
+        setRange(KTextEditor::Range(r.start(), c), false);
+      }
+    }
+  }
+}
+
+void MultiCursorView::selectPageUp()
+{
+// TODO
+
+}
+
+void MultiCursorView::selectPageDown()
+{
+// TODO
+
+}
+
+
+void MultiCursorView::selectBeginningOfLine()
+{
+// TODO
+
+}
+
+void MultiCursorView::selectEndOfLine()
+{
+// TODO
+
+}
+
+void MultiCursorView::selectWordRight()
+{
+// TODO
+
+}
+
+void MultiCursorView::selectWordLeft()
+{
+// TODO
+
+}
+
+void MultiCursorView::selectMatchingBracket()
+{
+// TODO
+
+}
+
 void MultiCursorView::setRange(
   const KTextEditor::Range& range, bool remove_if_contains)
 {
@@ -847,6 +1080,7 @@ bool MultiCursorView::eventFilter(QObject* obj, QEvent* event)
     if (QApplication::keyboardModifiers() & Qt::ControlModifier) {
       if (m_view->selection()) {
         if (m_has_selection_ctrl) {
+          // TODO synchronized
           setRange(m_view->selectionRange());
           return false;
         }
@@ -978,6 +1212,9 @@ void MultiCursorView::copyRanges()
   int l = m_ranges.front().end().line();
   QString s(m_document->text(m_ranges.front().toRange()));
   std::for_each(m_ranges.cbegin()+1, m_ranges.cend(), [&](Range const & r) {
+    if (r.isEmpty()) {
+      return ;
+    }
     const KTextEditor::Range range = r.toRange();
     s.append(range.start().line() != l ? '\n' : ' ');
     l = range.end().line();
@@ -998,6 +1235,9 @@ void MultiCursorView::pasteRanges()
     const QString text = QApplication::clipboard()->text();
     std::for_each(m_ranges.rbegin(), m_ranges.rend()
     , [this, &text](Range const & r){
+      if (r.isEmpty()) {
+        return ;
+      }
       KTextEditor::Range range = r.toRange();
       m_document->insertText(r.end(), text);
       m_document->removeText(range);

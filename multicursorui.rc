@@ -1,5 +1,5 @@
 <!DOCTYPE kpartgui>
-<kpartplugin name="ktexteditor_multicursor" library="ktexteditor_multicursor" version="11">
+<kpartplugin name="ktexteditor_multicursor" library="ktexteditor_multicursor" version="12">
 <MenuBar>
 	<Menu name="tools"><!--<Text>&amp;Tools</Text>-->
 		<separator group="tools_multicursor"/>
@@ -42,6 +42,8 @@
       <Action name="cut_multiselection" group="multiselection"/>
       <Action name="copy_multiselection" group="multiselection"/>
       <Action name="paste_multiselection" group="multiselection"/>
+      <separator group="copy_cut_multiselection"/>
+      <Action name="synchronise_multiselection" group="multiselection"/>
     </Menu>
   </Menu>
 </MenuBar>
