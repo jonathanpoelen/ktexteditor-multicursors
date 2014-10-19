@@ -45,20 +45,59 @@ lowerBound(Cont & cont, const T & x, Compare comp)
 
 struct MultiCursorView::CursorListDetail
 {
-  template<class RemoveIf>
-  static void moveColumn(CursorList & cursors, int column, RemoveIf pred)
+  template<class It, class Gen>
+  static It moveCursorImpl(It first, It last, It res, Gen createCursor)
   {
-    cursors.erase(std::remove_if(
-      cursors.begin(), cursors.end()
-    , [column, pred](Cursor & c) {
-      const int line = c.line();
-      const int col = c.column();
-      if (pred(line, col, column)) {
-        return true;
+    res->setCursor(createCursor(*first));
+    while (++first != last) {
+      first->setCursor(createCursor(*first));
+      if (!(*res == *first)) {
+        *++res = std::move(*first);
       }
-      c.setCursor(line, col + column);
-      return false;
-    }), cursors.end());
+    }
+    ++res;
+    return res;
+  }
+
+  template<class Gen>
+  static void moveCursor(
+    MultiCursorView & view, CursorList::iterator first, Gen createCursor)
+  {
+    const auto last = view.m_cursors.end();
+    if (first != last) {
+      view.m_cursors.erase(
+        moveCursorImpl(first, last, view.m_cursors.begin(), createCursor),
+        last
+      );
+      view.checkCursors();
+    }
+    else {
+      view.m_cursors.clear();
+      view.stopCursors();
+    }
+  }
+
+  static void moveCursorsByAction(
+    const char * name, bool & is_moved,
+    KTextEditor::View * view, CursorList & cursors, bool is_sorted = true)
+  {
+    if (is_moved) {
+      return ;
+    }
+    is_moved = true;
+    QAction * action = view->actionCollection()->action(name);
+    KTextEditor::Cursor cursor = view->cursorPosition();
+    for (Cursor & c : cursors) {
+      view->setCursorPosition(c.cursor());
+      action->trigger();
+      c.setCursor(view->cursorPosition());
+    }
+    view->setCursorPosition(cursor);
+    if (!is_sorted) {
+      std::sort(cursors.begin(), cursors.end());
+    }
+    cursors.erase(std::unique(cursors.begin(), cursors.end()), cursors.end());
+    is_moved = false;
   }
 
   static KTextEditor::Cursor
@@ -390,52 +429,77 @@ void MultiCursorView::textDelete()
     }\
   } while (0)
 
-#define SIGNALMAN_CURSORS_SYNCHRONIZE(F)\
-  SIGNALMAN_OBJECT(m_view, F, cursorPositionChanged(KTextEditor::View*,KTextEditor::Cursor))
-
 void MultiCursorView::connectCursors()
 {
   SIGNALMAN_CURSORS(connect);
-  connectSynchronizedCursors();
 }
 
 void MultiCursorView::disconnectCursors()
 {
   SIGNALMAN_CURSORS(disconnect);
-  disconnectSynchronizedCursors();
+  if (m_is_synchronized_cursor) {
+    m_is_synchronized_cursor = false;
+    disconnectSynchronizedCursors();
+  }
 }
 
 #undef SIGNALMAN_CURSORS
 #undef SIGNALMAN_CHECK_VAR
 
+#define SIGNALMAN_CURSORS_SYNCHRONIZE(F)                              \
+  KActionCollection* collec = m_view->actionCollection();             \
+  do {                                                                \
+    F(                                                                \
+      collec->action("move_line_up"), SIGNAL(triggered(bool)),        \
+      this, SLOT(moveCursorToUp()));                                  \
+    F(                                                                \
+      collec->action("move_line_down"), SIGNAL(triggered(bool)),      \
+      this, SLOT(moveCursorToDown()));                                \
+    F(                                                                \
+      collec->action("move_cusor_left"), SIGNAL(triggered(bool)),     \
+      this, SLOT(moveCursorToLeft()));                                \
+    F(                                                                \
+      collec->action("move_cursor_right"), SIGNAL(triggered(bool)),   \
+      this, SLOT(moveCursorToRight()));                               \
+    F(                                                                \
+      collec->action("beginning_of_line"), SIGNAL(triggered(bool)),   \
+      this, SLOT(moveCursorToBeginningOfLine()));                     \
+    F(                                                                \
+      collec->action("end_of_line"), SIGNAL(triggered(bool)),         \
+      this, SLOT(moveCursorToEndOfLine()));                           \
+    F(                                                                \
+      collec->action("to_matching_bracket"), SIGNAL(triggered(bool)), \
+      this, SLOT(moveCursorToMatchingBracket()));                     \
+    F(                                                                \
+      collec->action("word_left"), SIGNAL(triggered(bool)),           \
+      this, SLOT(moveCursorToWordLeft()));                            \
+    F(                                                                \
+      collec->action("word_right"), SIGNAL(triggered(bool)),          \
+      this, SLOT(moveCursorToWordRight()));                           \
+  } while(0)
+
 void MultiCursorView::connectSynchronizedCursors()
 {
-  if (m_is_synchronized_cursor) {
-    SIGNALMAN_CURSORS_SYNCHRONIZE(connect);
-    m_previous_position = m_view->cursorPosition();
-  }
+  SIGNALMAN_CURSORS_SYNCHRONIZE(connect);
 }
 
 void MultiCursorView::disconnectSynchronizedCursors()
 {
-  if (m_is_synchronized_cursor) {
-    SIGNALMAN_CURSORS_SYNCHRONIZE(disconnect);
-  }
+  SIGNALMAN_CURSORS_SYNCHRONIZE(disconnect);
 }
+
+#undef SIGNALMAN_CURSORS_SYNCHRONIZE
 
 void MultiCursorView::setSynchronizedCursors()
 {
   if (m_is_synchronized_cursor) {
     m_is_synchronized_cursor = false;
-    SIGNALMAN_CURSORS_SYNCHRONIZE(disconnect);
+    disconnectSynchronizedCursors();
   } else {
     m_is_synchronized_cursor = true;
-    m_previous_position = m_view->cursorPosition();
-    SIGNALMAN_CURSORS_SYNCHRONIZE(connect);
+    connectSynchronizedCursors();
   }
 }
-
-#undef SIGNALMAN_CURSORS_SYNCHRONIZE
 
 #define SIGNALMAN_OBJECT(O, F, P) F(O, SIGNAL(P), this, SLOT(P))
 #define SIGNALMAN_DOC(F, P) SIGNALMAN_OBJECT(m_document, F, P)
@@ -542,72 +606,113 @@ void MultiCursorView::setEnabledCursors(bool x)
   collec->action("reduce_right_selection")->setEnabled(x);
 }
 
-void MultiCursorView::cursorPositionChanged(KTextEditor::View*, const KTextEditor::Cursor& cursor)
+void MultiCursorView::moveCursorToUp()
 {
-  const int line = cursor.line() - m_previous_position.line();
-  const int column = cursor.column() - m_previous_position.column();
+  auto first = std::find_if(m_cursors.begin(), m_cursors.end()
+  , [](Cursor const & c) { return c.line() > 0; });
+  CursorListDetail::moveCursor(*this, first
+  , [](Cursor const & cur) {
+    const int l = cur.line();
+    const int c = cur.column();
+    return KTextEditor::Cursor(l-1, c);
+  });
+}
 
-  m_previous_position = cursor;
-
-  if (0 == line && 0 == column) {
-    return ;
+void MultiCursorView::moveCursorToDown()
+{
+  auto first = m_cursors.begin();
+  auto end = m_cursors.end();
+  const int lmax = m_document->lines() - 1;
+  for (; first != end; ++first) {
+    if (lmax < first->line()) {
+      break;
+    }
+    first->setCursor(first->line() + 1, first->column());
   }
+  m_cursors.erase(std::unique(m_cursors.begin(), first), end);
+  checkCursors();
+}
 
-  if (0 == column) {
-    auto end = m_cursors.end();
-    // move to top
-    if (line < 0) {
-      auto first = lowerBound(m_cursors, -line
-      , [](Cursor const & c, int l) { return c.line() < l; });
-      if (first != end) {
-        auto res = m_cursors.begin();
-        res->setCursor(first->line() + line, first->column());
-        while (++first != end) {
-          first->setCursor(first->line() + line, first->column());
-          if (!(*res == *first)) {
-            ++res;
-            *res = std::move(*first);
-          }
+void MultiCursorView::moveCursorToLeft()
+{
+  auto first = m_cursors.begin();
+  if (m_cursors.front().line() == 0 && m_cursors.front().column() == 0) {
+    ++first;
+  }
+  CursorListDetail::moveCursor(*this, first
+  , [this](Cursor const & cur) {
+    const int l = cur.line();
+    const int c = cur.column();
+    if (c == 0) {
+      return KTextEditor::Cursor(l-1, m_document->lineLength(l));
+    }
+    return KTextEditor::Cursor(l, c-1);
+  });
+}
+
+void MultiCursorView::moveCursorToRight()
+{
+  auto first = m_cursors.rbegin();
+  if (m_cursors.back() == m_document->documentEnd()) {
+    ++first;
+  }
+  auto end = m_cursors.rend();
+  if (first != end) {
+    m_cursors.erase(
+      m_cursors.begin()
+    , CursorListDetail::moveCursorImpl(
+        first, end
+      , m_cursors.rbegin()
+      , [this](Cursor const & cur) {
+        const int l = cur.line();
+        const int c = cur.column();
+        if (m_document->lineLength(l) == c) {
+          return KTextEditor::Cursor(l+1, 0);
         }
-        m_cursors.erase(++res, end);
-        checkCursors();
-      }
-      else {
-        m_cursors.clear();
-        stopCursors();
-      }
-    }
-    // move to bottom
-    else {
-      auto first = m_cursors.begin();
-      int lmax = m_document->lines() - line;
-      for (; first != end; ++first) {
-        if (lmax < first->line()) {
-          break;
-        }
-        first->setCursor(first->line() + line, first->column());
-      }
-      m_cursors.erase(std::unique(m_cursors.begin(), first), end);
-      checkCursors();
-    }
+        return KTextEditor::Cursor(l, c+1);
+    }).base());
   }
-  else if (0 == line) {
-    // move to left
-    if (column < 0) {
-      CursorListDetail::moveColumn(m_cursors, column
-      , [](int, int column, int move_column) {
-        return column + move_column < 0;
-      });
-    }
-    // move to right
-    else {
-      CursorListDetail::moveColumn(m_cursors, column
-      , [this](int line, int column, int move_column) {
-        return m_document->lineLength(line) <= column + move_column;
-      });
-    }
-    checkCursors();
+  else {
+    m_cursors.clear();
+    stopCursors();
   }
+}
+
+void MultiCursorView::moveCursorToBeginningOfLine()
+{
+  for (Cursor & c : m_cursors) {
+    c.setCursor(KTextEditor::Cursor(c.line(), 0));
+  }
+  m_cursors.erase(
+    std::unique(m_cursors.begin(), m_cursors.end()), m_cursors.end());
+}
+
+void MultiCursorView::moveCursorToEndOfLine()
+{
+  for (Cursor & c : m_cursors) {
+    const int l = c.line();
+    c.setCursor(KTextEditor::Cursor(l, m_document->lineLength(l)));
+  }
+  m_cursors.erase(
+    std::unique(m_cursors.begin(), m_cursors.end()), m_cursors.end());
+}
+
+void MultiCursorView::moveCursorToWordLeft()
+{
+  CursorListDetail::moveCursorsByAction(
+    "word_left", m_is_moved, m_view, m_cursors);
+}
+
+void MultiCursorView::moveCursorToWordRight()
+{
+  CursorListDetail::moveCursorsByAction(
+    "word_right", m_is_moved, m_view, m_cursors);
+}
+
+void MultiCursorView::moveCursorToMatchingBracket()
+{
+  CursorListDetail::moveCursorsByAction(
+    "to_matching_bracket", m_is_moved, m_view, m_cursors, false);
 }
 
 void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
@@ -1177,14 +1282,12 @@ bool MultiCursorView::startEditing(bool check_active)
    || !m_document->startEditing()) {
     return false;
   }
-  disconnectSynchronizedCursors();
   return m_has_exclusive_edit = true;
 }
 
 bool MultiCursorView::endEditing()
 {
   m_has_exclusive_edit = false;
-  connectSynchronizedCursors();
   return m_document->endEditing();
 }
 

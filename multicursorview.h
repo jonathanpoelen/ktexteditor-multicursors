@@ -145,7 +145,17 @@ private slots:
   void setActiveCursor();
 
   void setSynchronizedCursors();
-  void cursorPositionChanged(KTextEditor::View*, const KTextEditor::Cursor&);
+
+  void moveCursorToUp();
+  void moveCursorToDown();
+  void moveCursorToRight();
+  void moveCursorToLeft();
+
+  void moveCursorToBeginningOfLine();
+  void moveCursorToEndOfLine();
+  void moveCursorToMatchingBracket();
+  void moveCursorToWordRight();
+  void moveCursorToWordLeft();
 
   void copyLinesWithCursor();
   void cutLinesWithCursor();
@@ -215,7 +225,6 @@ private:
   KTextEditor::MovingInterface *m_smart;
   KTextEditor::Attribute::Ptr m_cursor_attr;
   KTextEditor::Attribute::Ptr m_selection_attr;
-  KTextEditor::Cursor m_previous_position;
   CursorList m_cursors;
   RangeList m_ranges;
   bool m_has_exclusive_edit;
@@ -224,6 +233,8 @@ private:
   bool m_remove_cursor_if_only_click;
   bool m_has_cursor_ctrl;
   bool m_has_selection_ctrl;
+
+  bool m_is_moved = false;
 };
 
 #endif
