@@ -45,6 +45,79 @@ lowerBound(Cont & cont, const T & x, Compare comp)
 
 struct MultiCursorView::CursorListDetail
 {
+  static KTextEditor::Cursor wordPrev(
+    KTextEditor::Document * doc
+  , const KTextEditor::MovingCursor & c)
+  {
+    int line = c.line();
+    int column = c.column();
+    const QString text_line = doc->line(line);
+
+    if (column != 0) {
+      while (column && text_line[column-1].isSpace()) {
+        --column;
+      }
+    }
+
+    if (column == 0) {
+      if (line) {
+        --line;
+        column = doc->lineLength(line);
+      }
+    }
+    else if (text_line[column-1].isLetterOrNumber()) {
+      do {
+        --column;
+      } while (column && text_line[column-1].isLetterOrNumber());
+    }
+    else {
+      do {
+        --column;
+      } while (column
+        && !text_line[column-1].isLetterOrNumber()
+        && !text_line[column-1].isSpace()
+      );
+    }
+
+    return {line, column};
+  }
+
+  static KTextEditor::Cursor wordNext(
+    KTextEditor::Document * doc
+  , const KTextEditor::MovingCursor & c)
+  {
+    int line = c.line();
+    int column = c.column();
+    const QString text_line = doc->line(line);
+    const int max_line = doc->lineLength(line);
+
+    if (column == max_line) {
+      if (line + 1 != doc->lines()) {
+        ++line;
+        column = 0;
+      }
+    }
+    else if (text_line[column].isLetterOrNumber()) {
+      do {
+        ++column;
+      } while (column != max_line && text_line[column].isLetterOrNumber());
+    }
+    else {
+      do {
+        ++column;
+      } while (column != max_line
+        && !text_line[column].isLetterOrNumber()
+        && !text_line[column].isSpace()
+      );
+    }
+
+    while (column != max_line && text_line[column].isSpace()) {
+      ++column;
+    }
+
+    return {line, column};
+  }
+
   template<class It, class Gen>
   static It moveCursorImpl(It first, It last, It res, Gen createCursor)
   {
@@ -348,12 +421,12 @@ MultiCursorView::MultiCursorView(
   ENTRY("Set Virtual Selection", "set_multiselection", setRange());
   action->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_R);
 
-  ENTRY("Remove All Virtuals Selections", "remove_all_multiselection", removeAllRanges());
+  ENTRY("Deselect All Virtuals Selections", "remove_all_multiselection", removeAllRanges());
   action->setShortcut(Qt::CTRL + Qt::Key_Underscore);
 
-  ENTRY("Remove Virtuals Selections Line", "remove_line_multiselection", removeRangesOnline());
+  ENTRY("Deselect Virtuals Selections Line", "remove_line_multiselection", removeRangesOnline());
 
-  ENTRY("Clear Virtuals Selections", "clear_multiselection", clearRanges());
+  ENTRY("Remove Text In a Virtuals Selections", "clear_multiselection", clearRanges());
   action->setShortcut(Qt::ALT + Qt::Key_Escape);
 
   ENTRY("Cut Virtuals Selections", "cut_multiselection", cutRanges());
@@ -372,6 +445,9 @@ MultiCursorView::MultiCursorView(
   ENTRY("Move to Next Virtual Selection End", "next_end_multiselection", moveToNextEndRange());
 
   ENTRY("Move to Previous Virtual Selection End", "previous_end_multiselection", moveToPreviousEndRange());
+
+  ENTRY("Set Virtual Selection From Virtual Cursors", "from_cursor_multiselection", rangesFromCursors());
+  action->setEnabled(false);
 
   ENTRY("Synchronize With the Selection", "synchronise_multiselection", setSynchronizedRanges());
   action->setCheckable(true);
@@ -422,6 +498,8 @@ void MultiCursorView::textDelete()
 #define SIGNALMAN_CHECK(F) SIGNALMAN_CHECK_##F
 #define SIGNALMAN_CHECK_connect SIGNALMAN_CHECK_VAR.empty()
 #define SIGNALMAN_CHECK_disconnect !SIGNALMAN_CHECK_VAR.empty()
+#define SIGNALMAN_F_TO_BOOL_connect true
+#define SIGNALMAN_F_TO_BOOL_disconnect false
 
 #define SIGNALMAN_CURSORS(F)\
   do { \
@@ -431,6 +509,7 @@ void MultiCursorView::textDelete()
       SIGNALMAN_DOC(F, exclusiveEditStart(KTextEditor::Document*));\
       SIGNALMAN_DOC(F, exclusiveEditEnd(KTextEditor::Document*));\
     }\
+    actionCollection()->action("from_cursor_multiselection")->setEnabled(SIGNALMAN_F_TO_BOOL_##F);\
   } while (0)
 
 void MultiCursorView::connectCursors()
@@ -442,13 +521,14 @@ void MultiCursorView::disconnectCursors()
 {
   SIGNALMAN_CURSORS(disconnect);
   if (m_is_synchronized_cursor) {
-    m_is_synchronized_cursor = false;
-    disconnectSynchronizedCursors();
+    actionCollection()->action("synchronise_multicursor")->trigger();
   }
 }
 
 #undef SIGNALMAN_CURSORS
 #undef SIGNALMAN_CHECK_VAR
+#undef SIGNALMAN_F_TO_BOOL_connect
+#undef SIGNALMAN_F_TO_BOOL_disconnect
 
 #define SIGNALMAN_CURSORS_SYNCHRONIZE(F)                              \
   KActionCollection* collec = m_view->actionCollection();             \
@@ -460,6 +540,7 @@ void MultiCursorView::disconnectCursors()
       collec->action("move_line_down"), SIGNAL(triggered(bool)),      \
       this, SLOT(moveCursorToDown()));                                \
     F(                                                                \
+      /* "cusor" is ok */                                             \
       collec->action("move_cusor_left"), SIGNAL(triggered(bool)),     \
       this, SLOT(moveCursorToLeft()));                                \
     F(                                                                \
@@ -526,6 +607,9 @@ void MultiCursorView::connectRanges()
 void MultiCursorView::disconnectRanges()
 {
   SIGNALMAN_RANGES(disconnect);
+  if (m_is_synchronized_selection) {
+    actionCollection()->action("synchronise_multiselection")->trigger();
+  }
 }
 
 #undef SIGNALMAN_RANGES
@@ -536,49 +620,52 @@ void MultiCursorView::disconnectRanges()
 #undef SIGNALMAN_OBJECT
 #undef SIGNALMAN_DOC
 
+#define SIGNALMAN_RANGES_SYNCHRONIZE(F)                                    \
+  do{                                                                      \
+    KActionCollection* collec = m_view->actionCollection();                \
+    F(                                                                     \
+      collec->action("select_line_up"), SIGNAL(triggered(bool)),           \
+      this, SLOT(selectLineUp()));                                         \
+    F(                                                                     \
+      collec->action("select_line_down"), SIGNAL(triggered(bool)),         \
+      this, SLOT(selectLineDown()));                                       \
+    F(                                                                     \
+      collec->action("select_char_left"), SIGNAL(triggered(bool)),         \
+      this, SLOT(selectCharLeft()));                                       \
+    F(                                                                     \
+      collec->action("select_char_right"), SIGNAL(triggered(bool)),        \
+      this, SLOT(selectCharRight()));                                      \
+    F(                                                                     \
+      collec->action("select_word_left"), SIGNAL(triggered(bool)),         \
+      this, SLOT(selectWordLeft()));                                       \
+    F(                                                                     \
+      collec->action("select_word_right"), SIGNAL(triggered(bool)),        \
+      this, SLOT(selectWordRight()));                                      \
+    F(                                                                     \
+      collec->action("select_beginning_of_line"), SIGNAL(triggered(bool)), \
+      this, SLOT(selectBeginningOfLine()));                                \
+    F(                                                                     \
+      collec->action("select_end_of_line"), SIGNAL(triggered(bool)),       \
+      this, SLOT(selectEndOfLine()));                                      \
+    /*F(                                                                   \
+      collec->action("select_matching_bracket"), SIGNAL(triggered(bool)),  \
+      this, SLOT(selectMatchingBracket()));                                \
+    F(                                                                     \
+      collec->action("select_page_up"), SIGNAL(triggered(bool)),           \
+      this, SLOT(selectPageUp()));                                         \
+    F(                                                                     \
+      collec->action("select_page_down"), SIGNAL(triggered(bool)),         \
+      this, SLOT(selectPageDown()));*/                                     \
+  } while(0)
+
 void MultiCursorView::connectSynchronizedRanges()
 {
-// TODO
-  KActionCollection* collec = m_view->actionCollection();
-  connect(
-    collec->action("select_line_up"), SIGNAL(triggered(bool)),
-    this, SLOT(selectLineUp()));
-  connect(
-    collec->action("select_line_down"), SIGNAL(triggered(bool)),
-    this, SLOT(selectLineDown()));
-  connect(
-    collec->action("select_char_left"), SIGNAL(triggered(bool)),
-    this, SLOT(selectCharLeft()));
-  connect(
-    collec->action("select_char_right"), SIGNAL(triggered(bool)),
-    this, SLOT(selectCharRight()));
-  connect(
-    collec->action("select_word_left"), SIGNAL(triggered(bool)),
-    this, SLOT(selectWordLeft()));
-  connect(
-    collec->action("select_word_right"), SIGNAL(triggered(bool)),
-    this, SLOT(selectWordRight()));
-  connect(
-    collec->action("select_beginning_of_line"), SIGNAL(triggered(bool)),
-    this, SLOT(selectBeginningOfLine()));
-  connect(
-    collec->action("select_end_of_line"), SIGNAL(triggered(bool)),
-    this, SLOT(selectEndOfLine()));
-  connect(
-    collec->action("select_matching_bracket"), SIGNAL(triggered(bool)),
-    this, SLOT(selectMatchingBracket()));
-  connect(
-    collec->action("select_page_up"), SIGNAL(triggered(bool)),
-    this, SLOT(selectPageUp()));
-  connect(
-    collec->action("select_page_down"), SIGNAL(triggered(bool)),
-    this, SLOT(selectPageDown()));
+  SIGNALMAN_RANGES_SYNCHRONIZE(connect);
 }
 
 void MultiCursorView::disconnectSynchronizedRanges()
 {
-// TODO
-
+  SIGNALMAN_RANGES_SYNCHRONIZE(disconnect);
 }
 
 void MultiCursorView::setSynchronizedRanges()
@@ -794,10 +881,16 @@ void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
   }
 }
 
-void MultiCursorView::cursorsToRanges()
+void MultiCursorView::rangesFromCursors()
 {
-// TODO
-
+  for (auto & c : m_cursors) {
+    KTextEditor::Cursor cursor = c.cursor();
+    auto it_start = CursorListDetail::lowerBoundEnd(m_ranges, cursor);
+    if (it_start == m_ranges.end() || it_start->end() < cursor) {
+      KTextEditor::Range range(cursor, cursor);
+      m_ranges.emplace(it_start, newMovingRange(range));
+    }
+  }
 }
 
 void MultiCursorView::selectLineUp()
@@ -816,8 +909,7 @@ void MultiCursorView::selectLineUp()
   else {
     for (Range & r : ranges) {
       auto const & cend = r.end();
-      const int cline = cend.line();
-      const int line = std::max(cline - 1, 0);
+      const int line = std::max(cend.line() - 1, 0);
       KTextEditor::Cursor c(line, cend.column());
       setRange(KTextEditor::Range(r.start(), c), false);
     }
@@ -833,7 +925,7 @@ void MultiCursorView::selectLineDown()
     for (Range & r : ranges) {
       auto const & cend = r.end();
       const int cline = cend.line();
-      const int line = std::min(cline + 1, m_document->lineLength(cline));
+      const int line = cline + 1 < m_document->lines() ? cline+1 : cline;
       KTextEditor::Cursor c(line, cend.column());
       setRange(KTextEditor::Range(r.start(), c), false);
     }
@@ -842,7 +934,7 @@ void MultiCursorView::selectLineDown()
     for (Range & r : ranges) {
       auto const & cstart = r.start();
       const int cline = cstart.line();
-      const int line = std::min(cline + 1, m_document->lineLength(cline));
+      const int line = cline + 1 < m_document->lines() ? cline+1 : cline;
       KTextEditor::Cursor c(line, cstart.column());
       setRange(KTextEditor::Range(c, r.end()), false);
     }
@@ -875,7 +967,7 @@ void MultiCursorView::selectCharRight()
       auto const & cstart = r.start();
       const int cline = cstart.line();
       const int ccolumn = cstart.column();
-      if (ccolumn + 1 != m_document->lineLength(cline)) {
+      if (ccolumn + 1 < m_document->lineLength(cline)) {
         KTextEditor::Cursor c(cline, ccolumn + 1);
         setRange(KTextEditor::Range(c, r.end()), false);
       }
@@ -924,48 +1016,80 @@ void MultiCursorView::selectCharLeft()
   }
 }
 
-void MultiCursorView::selectPageUp()
-{
-// TODO
-
-}
-
-void MultiCursorView::selectPageDown()
-{
-// TODO
-
-}
-
-
 void MultiCursorView::selectBeginningOfLine()
 {
-// TODO
-
+  RangeList ranges(std::move(m_ranges));
+  m_ranges.reserve(ranges.size());
+  for (Range & r : ranges) {
+    setRange(KTextEditor::Range(
+      KTextEditor::Cursor(r.start().line(), 0), r.end()), false);
+  }
 }
 
 void MultiCursorView::selectEndOfLine()
 {
-// TODO
-
+  RangeList ranges(std::move(m_ranges));
+  m_ranges.reserve(ranges.size());
+  for (Range & r : ranges) {
+    const int line = r.end().line();
+    const int column = m_document->lineLength(line);
+    setRange(KTextEditor::Range(
+      r.start(), KTextEditor::Cursor(line, column)), false);
+  }
 }
 
 void MultiCursorView::selectWordRight()
 {
-// TODO
-
+  RangeList ranges(std::move(m_ranges));
+  m_ranges.reserve(ranges.size());
+  if (m_view->selection()
+   && m_view->selectionRange().end() == m_view->cursorPosition()) {
+    for (Range & r : ranges) {
+      setRange(KTextEditor::Range(
+        r.start(), CursorListDetail::wordNext(m_document, r.end())), false);
+    }
+  }
+  else {
+    for (Range & r : ranges) {
+      setRange(KTextEditor::Range(
+        CursorListDetail::wordNext(m_document, r.start()), r.end()), false);
+    }
+  }
 }
 
 void MultiCursorView::selectWordLeft()
 {
-// TODO
-
+  RangeList ranges(std::move(m_ranges));
+  m_ranges.reserve(ranges.size());
+  if (m_view->selection()
+   && m_view->selectionRange().start() == m_view->cursorPosition()) {
+    for (Range & r : ranges) {
+      setRange(KTextEditor::Range(
+        CursorListDetail::wordPrev(m_document, r.start()), r.end()), false);
+    }
+  }
+  else {
+    for (Range & r : ranges) {
+      setRange(KTextEditor::Range(
+        r.start(), CursorListDetail::wordPrev(m_document, r.end())), false);
+    }
+  }
 }
 
-void MultiCursorView::selectMatchingBracket()
-{
-// TODO
+//void MultiCursorView::selectPageUp()
+//{
+//// TODO
+//}
 
-}
+//void MultiCursorView::selectPageDown()
+//{
+//// TODO
+//}
+
+//void MultiCursorView::selectMatchingBracket()
+//{
+//// TODO
+//}
 
 void MultiCursorView::setRange(
   const KTextEditor::Range& range, bool remove_if_contains)

@@ -183,7 +183,7 @@ private slots:
   void moveToNextEndRange();
   void moveToPreviousEndRange();
 
-  void cursorsToRanges();
+  void rangesFromCursors();
 
   void setSynchronizedRanges();
 
@@ -192,13 +192,13 @@ private slots:
   void selectCharRight();
   void selectCharLeft();
 
-  void selectPageUp();
-  void selectPageDown();
   void selectBeginningOfLine();
   void selectEndOfLine();
-  void selectMatchingBracket();
   void selectWordRight();
   void selectWordLeft();
+  //void selectPageUp();
+  //void selectPageDown();
+  //void selectMatchingBracket();
 
 private:
   bool endEditing();
