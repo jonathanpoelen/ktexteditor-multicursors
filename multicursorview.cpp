@@ -45,12 +45,57 @@ lowerBound(Cont & cont, const T & x, Compare comp)
 
 struct MultiCursorView::CursorListDetail
 {
-  static KTextEditor::Cursor wordPrev(
-    KTextEditor::Document * doc
-  , const KTextEditor::MovingCursor & c)
+  template<class GetCursor1, class GetCursor2, class F>
+  static void selectAlgo(
+    bool b, MultiCursorView & mview, GetCursor1 get1, GetCursor2 get2, F f)
   {
-    int line = c.line();
-    int column = c.column();
+    mview.m_ranges_temp.swap(mview.m_ranges);
+    mview.m_ranges.clear();
+    mview.m_ranges.reserve(mview.m_ranges_temp.size());
+
+    if (b) {
+      for (Range & r : mview.m_ranges_temp) {
+        auto const & c = get1(r);
+        KTextEditor::Range range(f(c.line(), c.column()), get2(r));
+        mview.setRange(range, false);
+      }
+    }
+    else {
+      for (Range & r : mview.m_ranges_temp) {
+        auto const & c = get2(r);
+        KTextEditor::Range range(f(c.line(), c.column()), get1(r));
+        mview.setRange(range, false);
+      }
+    }
+
+    mview.m_ranges_temp.clear();
+  }
+
+  template<class F>
+  static void selectAlgoLeft(MultiCursorView & mview, F f)
+  {
+    selectAlgo(
+      mview.m_view->selectionRange().start() == mview.m_view->cursorPosition()
+    , mview
+    , CursorListDetail::RangeStart()
+    , CursorListDetail::RangeEnd()
+    , f);
+  }
+
+  template<class F>
+  static void selectAlgoRight(MultiCursorView & mview, F f)
+  {
+    selectAlgo(
+      mview.m_view->selectionRange().end() == mview.m_view->cursorPosition()
+    , mview
+    , CursorListDetail::RangeEnd()
+    , CursorListDetail::RangeStart()
+    , f);
+  }
+
+  static KTextEditor::Cursor wordPrev(
+    KTextEditor::Document * doc, int line, int column)
+  {
     const QString text_line = doc->line(line);
 
     if (column != 0) {
@@ -83,11 +128,8 @@ struct MultiCursorView::CursorListDetail
   }
 
   static KTextEditor::Cursor wordNext(
-    KTextEditor::Document * doc
-  , const KTextEditor::MovingCursor & c)
+    KTextEditor::Document * doc, int line, int column)
   {
-    int line = c.line();
-    int column = c.column();
     const QString text_line = doc->line(line);
     const int max_line = doc->lineLength(line);
 
@@ -895,185 +937,90 @@ void MultiCursorView::rangesFromCursors()
 
 void MultiCursorView::selectLineUp()
 {
-  RangeList ranges(std::move(m_ranges));
-  m_ranges.reserve(ranges.size());
-  if (m_view->selection()
-   && m_view->selectionRange().start() == m_view->cursorPosition()) {
-    for (Range & r : ranges) {
-      auto const & cstart = r.start();
-      const int line = std::max(cstart.line() - 1, 0);
-      KTextEditor::Cursor c(line, cstart.column());
-      setRange(KTextEditor::Range(c, r.end()), false);
-    }
-  }
-  else {
-    for (Range & r : ranges) {
-      auto const & cend = r.end();
-      const int line = std::max(cend.line() - 1, 0);
-      KTextEditor::Cursor c(line, cend.column());
-      setRange(KTextEditor::Range(r.start(), c), false);
-    }
-  }
+  CursorListDetail::selectAlgoLeft(*this
+  , [this](int line, int column) {
+    return KTextEditor::Cursor(std::max(line - 1, 0), column);
+  });
 }
 
 void MultiCursorView::selectLineDown()
 {
-  RangeList ranges(std::move(m_ranges));
-  m_ranges.reserve(ranges.size());
-  if (m_view->selection()
-   && m_view->selectionRange().end() == m_view->cursorPosition()) {
-    for (Range & r : ranges) {
-      auto const & cend = r.end();
-      const int cline = cend.line();
-      const int line = cline + 1 < m_document->lines() ? cline+1 : cline;
-      KTextEditor::Cursor c(line, cend.column());
-      setRange(KTextEditor::Range(r.start(), c), false);
+  CursorListDetail::selectAlgoRight(*this
+  , [this](int line, int column) {
+    if (line + 1 < m_document->lines()) {
+      ++line;
     }
-  }
-  else {
-    for (Range & r : ranges) {
-      auto const & cstart = r.start();
-      const int cline = cstart.line();
-      const int line = cline + 1 < m_document->lines() ? cline+1 : cline;
-      KTextEditor::Cursor c(line, cstart.column());
-      setRange(KTextEditor::Range(c, r.end()), false);
-    }
-  }
+    return KTextEditor::Cursor(line, column);
+  });
 }
 
 void MultiCursorView::selectCharRight()
 {
-  RangeList ranges(std::move(m_ranges));
-  m_ranges.reserve(ranges.size());
   const int linemax = m_document->lines();
-  if (m_view->selection()
-   && m_view->selectionRange().end() == m_view->cursorPosition()) {
-    for (Range & r : ranges) {
-      auto const & cend = r.end();
-      const int cline = cend.line();
-      const int ccolumn = cend.column();
-      if (ccolumn + 1 < m_document->lineLength(cline)) {
-        KTextEditor::Cursor c(cline, ccolumn + 1);
-        setRange(KTextEditor::Range(r.start(), c), false);
-      }
-      else if (linemax != cline + 1) {
-        KTextEditor::Cursor c(cline + 1, 0);
-        setRange(KTextEditor::Range(r.start(), c), false);
-      }
-    }
-  }
-  else {
-    for (Range & r : ranges) {
-      auto const & cstart = r.start();
-      const int cline = cstart.line();
-      const int ccolumn = cstart.column();
-      if (ccolumn + 1 < m_document->lineLength(cline)) {
-        KTextEditor::Cursor c(cline, ccolumn + 1);
-        setRange(KTextEditor::Range(c, r.end()), false);
-      }
-      else if (linemax != cline + 1) {
-        KTextEditor::Cursor c(cline + 1, 0);
-        setRange(KTextEditor::Range(c, r.end()), false);
-      }
-    }
-  }
+  CursorListDetail::selectAlgoRight(*this
+  , [linemax, this](int line, int column) {
+    return (column + 1 < m_document->lineLength(line))
+      ? KTextEditor::Cursor(line, column + 1)
+      : ((linemax != line + 1)
+        ? KTextEditor::Cursor(line + 1, 0)
+        : KTextEditor::Cursor(line, column)
+      );
+  });
 }
 
 void MultiCursorView::selectCharLeft()
 {
-  RangeList ranges(std::move(m_ranges));
-  m_ranges.reserve(ranges.size());
-  if (m_view->selection()
-   && m_view->selectionRange().start() == m_view->cursorPosition()) {
-    for (Range & r : ranges) {
-      auto const & cstart = r.start();
-      const int cline = cstart.line();
-      const int ccolumn = cstart.column();
-      if (ccolumn != 0) {
-        KTextEditor::Cursor c(cline, ccolumn - 1);
-        setRange(KTextEditor::Range(c, r.end()), false);
-      }
-      else if (cline != 0) {
-        KTextEditor::Cursor c(cline - 1, m_document->lineLength(cline));
-        setRange(KTextEditor::Range(c, r.end()), false);
-      }
-    }
-  }
-  else {
-    for (Range & r : ranges) {
-      auto const & cstart = r.end();
-      const int cline = cstart.line();
-      const int ccolumn = cstart.column();
-      if (ccolumn != 0) {
-        KTextEditor::Cursor c(cline, ccolumn - 1);
-        setRange(KTextEditor::Range(r.start(), c), false);
-      }
-      else if (cline) {
-        KTextEditor::Cursor c(cline - 1, m_document->lineLength(cline));
-        setRange(KTextEditor::Range(r.start(), c), false);
-      }
-    }
-  }
+  CursorListDetail::selectAlgoLeft(*this
+  , [this](int line, int column) {
+    return (column != 0)
+      ? KTextEditor::Cursor(line, column - 1)
+      : ((line != 0)
+        ? KTextEditor::Cursor(line - 1, m_document->lineLength(line - 1))
+        : KTextEditor::Cursor(line, column)
+      );
+  });
 }
 
 void MultiCursorView::selectBeginningOfLine()
 {
-  RangeList ranges(std::move(m_ranges));
-  m_ranges.reserve(ranges.size());
-  for (Range & r : ranges) {
-    setRange(KTextEditor::Range(
-      KTextEditor::Cursor(r.start().line(), 0), r.end()), false);
+  m_ranges_temp.swap(m_ranges);
+  m_ranges.clear();
+  m_ranges.reserve(m_ranges_temp.size());
+  for (Range & r : m_ranges_temp) {
+    KTextEditor::Cursor c(r.start().line(), 0);
+    setRange(KTextEditor::Range(c, r.end()), false);
   }
+  m_ranges_temp.clear();
 }
 
 void MultiCursorView::selectEndOfLine()
 {
-  RangeList ranges(std::move(m_ranges));
-  m_ranges.reserve(ranges.size());
-  for (Range & r : ranges) {
+  m_ranges_temp.swap(m_ranges);
+  m_ranges.clear();
+  m_ranges.reserve(m_ranges_temp.size());
+  for (Range & r : m_ranges_temp) {
     const int line = r.end().line();
     const int column = m_document->lineLength(line);
-    setRange(KTextEditor::Range(
-      r.start(), KTextEditor::Cursor(line, column)), false);
+    KTextEditor::Cursor c(line, column);
+    setRange(KTextEditor::Range(r.start(), c), false);
   }
+  m_ranges_temp.clear();
 }
 
 void MultiCursorView::selectWordRight()
 {
-  RangeList ranges(std::move(m_ranges));
-  m_ranges.reserve(ranges.size());
-  if (m_view->selection()
-   && m_view->selectionRange().end() == m_view->cursorPosition()) {
-    for (Range & r : ranges) {
-      setRange(KTextEditor::Range(
-        r.start(), CursorListDetail::wordNext(m_document, r.end())), false);
-    }
-  }
-  else {
-    for (Range & r : ranges) {
-      setRange(KTextEditor::Range(
-        CursorListDetail::wordNext(m_document, r.start()), r.end()), false);
-    }
-  }
+  CursorListDetail::selectAlgoRight(*this
+  , [this](int line, int column) {
+    return CursorListDetail::wordNext(m_document, line, column);
+  });
 }
 
 void MultiCursorView::selectWordLeft()
 {
-  RangeList ranges(std::move(m_ranges));
-  m_ranges.reserve(ranges.size());
-  if (m_view->selection()
-   && m_view->selectionRange().start() == m_view->cursorPosition()) {
-    for (Range & r : ranges) {
-      setRange(KTextEditor::Range(
-        CursorListDetail::wordPrev(m_document, r.start()), r.end()), false);
-    }
-  }
-  else {
-    for (Range & r : ranges) {
-      setRange(KTextEditor::Range(
-        r.start(), CursorListDetail::wordPrev(m_document, r.end())), false);
-    }
-  }
+  CursorListDetail::selectAlgoLeft(*this
+  , [this](int line, int column) {
+    return CursorListDetail::wordPrev(m_document, line, column);
+  });
 }
 
 //void MultiCursorView::selectPageUp()

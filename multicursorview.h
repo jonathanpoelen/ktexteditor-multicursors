@@ -249,6 +249,7 @@ private:
   KTextEditor::Attribute::Ptr m_selection_attr;
   CursorList m_cursors;
   RangeList m_ranges;
+  RangeList m_ranges_temp;
   bool m_has_exclusive_edit;
   bool m_is_active;
   bool m_is_synchronized_cursor;
