@@ -1,4 +1,4 @@
- /*
+/*
 * This file is part of Katepart
 *
 * This program is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@
 #include <QClipboard>
 #include <KConfigGroup>
 
+namespace {
 template<class Cont, class T>
 static typename Cont::iterator
 lowerBound(Cont & cont, const T & x)
@@ -42,6 +43,10 @@ static typename Cont::iterator
 lowerBound(Cont & cont, const T & x, Compare comp)
 { return std::lower_bound(cont.begin(), cont.end(), x, comp); }
 
+template<class Cont>
+void uniqueCont(Cont & cont)
+{ cont.erase(std::unique(cont.begin(), cont.end()), cont.end()); }
+}
 
 struct MultiCursorView::CursorListDetail
 {
@@ -190,29 +195,6 @@ struct MultiCursorView::CursorListDetail
       view.m_cursors.clear();
       view.stopCursors();
     }
-  }
-
-  static void moveCursorsByAction(
-    const char * name, bool & is_moved,
-    KTextEditor::View * view, CursorList & cursors, bool is_sorted = true)
-  {
-    if (is_moved) {
-      return ;
-    }
-    is_moved = true;
-    QAction * action = view->actionCollection()->action(name);
-    KTextEditor::Cursor cursor = view->cursorPosition();
-    for (Cursor & c : cursors) {
-      view->setCursorPosition(c.cursor());
-      action->trigger();
-      c.setCursor(view->cursorPosition());
-    }
-    view->setCursorPosition(cursor);
-    if (!is_sorted) {
-      std::sort(cursors.begin(), cursors.end());
-    }
-    cursors.erase(std::unique(cursors.begin(), cursors.end()), cursors.end());
-    is_moved = false;
   }
 
   static KTextEditor::Cursor
@@ -689,10 +671,10 @@ void MultiCursorView::disconnectRanges()
     F(                                                                     \
       collec->action("select_end_of_line"), SIGNAL(triggered(bool)),       \
       this, SLOT(selectEndOfLine()));                                      \
-    /*F(                                                                   \
+    F(                                                                     \
       collec->action("select_matching_bracket"), SIGNAL(triggered(bool)),  \
       this, SLOT(selectMatchingBracket()));                                \
-    F(                                                                     \
+    /*F(                                                                   \
       collec->action("select_page_up"), SIGNAL(triggered(bool)),           \
       this, SLOT(selectPageUp()));                                         \
     F(                                                                     \
@@ -872,8 +854,7 @@ void MultiCursorView::moveCursorToBeginningOfLine()
   for (Cursor & c : m_cursors) {
     c.setCursor(KTextEditor::Cursor(c.line(), 0));
   }
-  m_cursors.erase(
-    std::unique(m_cursors.begin(), m_cursors.end()), m_cursors.end());
+  uniqueCont(m_cursors);
 }
 
 void MultiCursorView::moveCursorToEndOfLine()
@@ -882,26 +863,42 @@ void MultiCursorView::moveCursorToEndOfLine()
     const int l = c.line();
     c.setCursor(KTextEditor::Cursor(l, m_document->lineLength(l)));
   }
-  m_cursors.erase(
-    std::unique(m_cursors.begin(), m_cursors.end()), m_cursors.end());
+  uniqueCont(m_cursors);
 }
 
 void MultiCursorView::moveCursorToWordLeft()
 {
-  CursorListDetail::moveCursorsByAction(
-    "word_left", m_is_moved, m_view, m_cursors);
+  for (Cursor & c : m_cursors) {
+    c.setCursor(CursorListDetail::wordPrev(m_document, c.line(), c.column()));
+  }
+  uniqueCont(m_cursors);
 }
 
 void MultiCursorView::moveCursorToWordRight()
 {
-  CursorListDetail::moveCursorsByAction(
-    "word_right", m_is_moved, m_view, m_cursors);
+  for (Cursor & c : m_cursors) {
+    c.setCursor(CursorListDetail::wordNext(m_document, c.line(), c.column()));
+  }
+  uniqueCont(m_cursors);
 }
 
 void MultiCursorView::moveCursorToMatchingBracket()
 {
-  CursorListDetail::moveCursorsByAction(
-    "to_matching_bracket", m_is_moved, m_view, m_cursors, false);
+  if (m_is_moved) {
+    return ;
+  }
+  m_is_moved = true;
+  QAction * action = m_view->actionCollection()->action("to_matching_bracket");
+  KTextEditor::Cursor cursor = m_view->cursorPosition();
+  for (Cursor & c : m_cursors) {
+    m_view->setCursorPosition(c.cursor());
+    action->trigger();
+    c.setCursor(m_view->cursorPosition());
+  }
+  m_view->setCursorPosition(cursor);
+  std::sort(m_cursors.begin(), m_cursors.end());
+  uniqueCont(m_cursors);
+  m_is_moved = false;
 }
 
 void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
@@ -1033,10 +1030,24 @@ void MultiCursorView::selectWordLeft()
 //// TODO
 //}
 
-//void MultiCursorView::selectMatchingBracket()
-//{
-//// TODO
-//}
+void MultiCursorView::selectMatchingBracket()
+{
+  if (m_is_moved) {
+    return ;
+  }
+  m_is_moved = true;
+  QAction * action = m_view->actionCollection()->action("to_matching_bracket");
+  KTextEditor::Cursor cursor = m_view->cursorPosition();
+  KTextEditor::Range selection = m_view->selectionRange();
+  CursorListDetail::selectAlgoLeft(*this
+  , [action, this](int line, int column) {
+    m_view->setCursorPosition(KTextEditor::Cursor(line, column));
+    action->trigger();
+    return m_view->cursorPosition();
+  });
+  m_view->setCursorPosition(cursor);
+  m_is_moved = false;
+}
 
 void MultiCursorView::setRange(
   const KTextEditor::Range& range, bool remove_if_contains)

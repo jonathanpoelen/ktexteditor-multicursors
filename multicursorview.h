@@ -198,7 +198,7 @@ private slots:
   void selectWordLeft();
   //void selectPageUp();
   //void selectPageDown();
-  //void selectMatchingBracket();
+  void selectMatchingBracket();
 
 private:
   bool endEditing();
