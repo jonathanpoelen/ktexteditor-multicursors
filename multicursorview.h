@@ -26,6 +26,7 @@
 #include <KXMLGUIClient>
 #include <KTextEditor/Attribute>
 #include <KTextEditor/MovingRange>
+#include <ktexteditor/movingrangefeedback.h>
 
 namespace KTextEditor
 {
@@ -92,6 +93,9 @@ private:
     void revalid()
     { setCursor(line(), column()); }
 
+    bool isSame(KTextEditor::MovingRange * other) const
+    { return m_range.get() == other; }
+
   private:
     std::unique_ptr<KTextEditor::MovingRange> m_range;
   };
@@ -121,6 +125,9 @@ private:
 
     bool isEmpty() const
     { return m_range->isEmpty(); }
+
+    bool isSame(KTextEditor::MovingRange * other) const
+    { return m_range.get() == other; }
 
   private:
     std::unique_ptr<KTextEditor::MovingRange> m_range;
@@ -241,6 +248,28 @@ public:
 private:
   void setEventFilter(bool);
 
+  class InvalidedCursor : public KTextEditor::MovingRangeFeedback {
+    MultiCursorView & m_cursorview;
+
+  public:
+    InvalidedCursor(MultiCursorView & cursorview)
+    : m_cursorview(cursorview)
+    {}
+
+    virtual void rangeEmpty(KTextEditor::MovingRange* range);
+  };
+
+  class InvalidedRange : public KTextEditor::MovingRangeFeedback {
+    MultiCursorView & m_cursorview;
+
+  public:
+    InvalidedRange(MultiCursorView & cursorview)
+    : m_cursorview(cursorview)
+    {}
+
+    virtual void rangeEmpty(KTextEditor::MovingRange* range);
+  };
+
 private:
   KTextEditor::View *m_view;
   KTextEditor::Document *m_document;
@@ -257,8 +286,9 @@ private:
   bool m_remove_cursor_if_only_click;
   bool m_has_cursor_ctrl;
   bool m_has_selection_ctrl;
-
-  bool m_is_moved = false;
+  bool m_is_moved;
+  InvalidedCursor m_invalided_cursor;
+  InvalidedRange m_invalided_range;
 };
 
 #endif

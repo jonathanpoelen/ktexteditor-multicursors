@@ -50,6 +50,27 @@ void uniqueCont(Cont & cont)
 
 struct MultiCursorView::CursorListDetail
 {
+  template<class Cont, class Checker>
+  static void eraseInvalided(
+    MultiCursorView & cursorview
+  , Cont & cont
+  , KTextEditor::MovingRange* range
+  , Checker checker)
+  {
+    if (!cursorview.m_is_moved && !cursorview.m_has_exclusive_edit) {
+      auto pos = std::find_if(
+        cont.begin()
+      , cont.end()
+      , [range](typename Cont::value_type const & x){
+        return x.isSame(range);
+      });
+      /*if (pos != cont.end())*/ {
+        cont.erase(pos);
+        checker();
+      }
+    }
+  }
+
   template<class GetCursor1, class GetCursor2, class F>
   static void selectAlgo(
     bool b, MultiCursorView & mview, GetCursor1 get1, GetCursor2 get2, F f)
@@ -363,6 +384,28 @@ struct MultiCursorView::CursorListDetail
   }
 };
 
+
+void MultiCursorView::InvalidedCursor
+::rangeEmpty(KTextEditor::MovingRange* range)
+{
+  CursorListDetail::eraseInvalided(
+    m_cursorview
+  , m_cursorview.m_cursors
+  , range
+  , [this]() { m_cursorview.checkCursors(); });
+}
+
+void MultiCursorView::InvalidedRange
+::rangeEmpty(KTextEditor::MovingRange* range)
+{
+  CursorListDetail::eraseInvalided(
+    m_cursorview
+  , m_cursorview.m_ranges
+  , range
+  , [this]() { m_cursorview.checkRanges(); });
+}
+
+
 MultiCursorView::MultiCursorView(
   KTextEditor::View *view
 , KTextEditor::Attribute::Ptr cursor_attr
@@ -382,6 +425,9 @@ MultiCursorView::MultiCursorView(
 , m_remove_cursor_if_only_click(false)
 , m_has_cursor_ctrl(false)
 , m_has_selection_ctrl(false)
+, m_is_moved(false)
+, m_invalided_cursor(*this)
+, m_invalided_range(*this)
 {
 	setComponentData(MultiCursorPluginFactory::componentData());
 
@@ -1619,6 +1665,8 @@ KTextEditor::MovingRange* MultiCursorView::newMovingCursor(
   KTextEditor::MovingRange * moving_range = m_smart->newMovingRange(
     KTextEditor::Range(cursor, cursor.line(), cursor.column() + 1));
   moving_range->setAttribute(m_cursor_attr);
+  moving_range->setFeedback(
+    const_cast<InvalidedCursor*>(&m_invalided_cursor));
   return moving_range;
 }
 
@@ -1627,6 +1675,8 @@ KTextEditor::MovingRange* MultiCursorView::newMovingRange(
 {
   KTextEditor::MovingRange * moving_range = m_smart->newMovingRange(range);
   moving_range->setAttribute(m_selection_attr);
+  moving_range->setFeedback(
+    const_cast<InvalidedRange*>(&m_invalided_range));
   return moving_range;
 }
 
