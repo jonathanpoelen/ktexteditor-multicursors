@@ -296,9 +296,6 @@ struct MultiCursorView::CursorListDetail
         ++prev;
       }
     }
-    for (Cursor & c : cursors) {
-      c.revalid();
-    }
   }
 
   template<class Pred>
@@ -445,16 +442,16 @@ MultiCursorView::MultiCursorView(
 	ENTRY("Set Virtual Cursor", "set_multicursor", setCursor());
 	action->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_C);
 
-  ENTRY("Backspace Character on Virtuals Cursors", "backspace_multicursor", textBackspace());
+  ENTRY("Backspace Character on Virtuals Cursors", "backspace_multicursor", backspace());
 	action->setShortcut(Qt::ALT + Qt::Key_Backspace);
 
-  ENTRY("Delete Character on Virtuals Cursors", "delete_multicursor", textDelete());
+  ENTRY("Delete Character on Virtuals Cursors", "delete_multicursor", deleteNextCharacter());
 	action->setShortcut(Qt::ALT + Qt::Key_Delete);
 
   ENTRY("Remove All Virtuals Cursors", "remove_all_multicursor", removeAllCursors());
 	action->setShortcut(Qt::ALT + Qt::SHIFT + Qt::Key_Delete);
 
-  ENTRY("Remove Virtuals Cursors Line", "remove_line_multicursor", removeCursorsOnLine());
+  ENTRY("Remove Virtuals Cursors on Line", "remove_cursor_line_multicursor", removeCursorsOnLine());
 	action->setShortcut(Qt::CTRL + Qt::ALT +  Qt::Key_Delete);
 
 	ENTRY("Move to Next Virtual Cursor", "next_multicursor", moveToNextCursor());
@@ -542,7 +539,91 @@ void MultiCursorView::exclusiveEditEnd(KTextEditor::Document *)
 	m_has_exclusive_edit = false;
 }
 
-void MultiCursorView::textBackspace()
+
+void MultiCursorView::deleteLinesWithCursor()
+{
+  std::vector<int> lines(m_cursors.size());
+  auto pos = lines.begin();
+  int last_line = -1;
+  for (Cursor & c : m_cursors) {
+    const int line = c.line();
+    if (line != last_line) {
+      last_line = line;
+      *pos = line;
+      ++pos;
+    }
+  }
+
+  m_cursors.clear();
+  stopCursors();
+
+  auto e = lines.begin();
+  while (pos != e) {
+    m_document->removeLine(*--pos);
+  }
+}
+
+void MultiCursorView::deleteWordLeft()
+{
+  std::size_t i = m_cursors.size();
+  for (; i != 0; --i) {
+    const std::size_t sz = m_cursors.size();
+    Cursor & c = m_cursors[i-1];
+    m_document->removeText(KTextEditor::Range(
+      CursorListDetail::wordPrev(m_document, c.line(), c.column())
+    , c.cursor()
+    ));
+    i -= sz - m_cursors.size();
+  }
+}
+
+void MultiCursorView::deleteWordRight()
+{
+  class RevalidCursor : public KTextEditor::MovingRangeFeedback {
+    MultiCursorView & m_cursorview;
+  public:
+    Cursor * m_cursor;
+    bool m_is_same;
+
+    RevalidCursor(MultiCursorView & cursorview)
+    : m_cursorview(cursorview)
+    {}
+
+    virtual void rangeEmpty(KTextEditor::MovingRange* range) {
+      if (m_cursor->isSame(range)) {
+        m_is_same = true;
+      }
+      else {
+        m_cursorview.m_invalided_cursor.rangeEmpty(range);
+      }
+    }
+  };
+
+  RevalidCursor feedback(*this);
+
+  for (Cursor & c : m_cursors) {
+    c.setFeedback(&feedback);
+  }
+  for (std::size_t i = 0; i < m_cursors.size(); ++i) {
+    Cursor & c = m_cursors[i];
+    feedback.m_cursor = &c;
+    feedback.m_is_same = false;
+    const int line = c.line();
+    const int column = c.column();
+    m_document->removeText(KTextEditor::Range(
+      KTextEditor::Cursor(line, column)
+    , CursorListDetail::wordNext(m_document, line, column)
+    ));
+    if (feedback.m_is_same) {
+      c.setCursor(line, column);
+    }
+  }
+  for (Cursor & c : m_cursors) {
+    c.setFeedback(&m_invalided_cursor);
+  }
+}
+
+void MultiCursorView::backspace()
 {
   if (startEditing()) {
     CursorListDetail::removeBackwardText(
@@ -553,7 +634,7 @@ void MultiCursorView::textBackspace()
   }
 }
 
-void MultiCursorView::textDelete()
+void MultiCursorView::deleteNextCharacter()
 {
   if (startEditing()) {
     CursorListDetail::removeForwardText(m_document, m_cursors, 1);
@@ -571,15 +652,31 @@ void MultiCursorView::textDelete()
 #define SIGNALMAN_F_TO_BOOL_connect true
 #define SIGNALMAN_F_TO_BOOL_disconnect false
 
-#define SIGNALMAN_CURSORS(F)\
-  do { \
-    SIGNALMAN_DOC(F, textRemoved(KTextEditor::Document*,KTextEditor::Range,QString));\
-    SIGNALMAN_DOC(F, textInserted(KTextEditor::Document*,KTextEditor::Range));\
-    if (SIGNALMAN_CHECK(F)) {\
-      SIGNALMAN_DOC(F, exclusiveEditStart(KTextEditor::Document*));\
-      SIGNALMAN_DOC(F, exclusiveEditEnd(KTextEditor::Document*));\
-    }\
-    actionCollection()->action("from_cursor_multiselection")->setEnabled(SIGNALMAN_F_TO_BOOL_##F);\
+#define SIGNALMAN_CURSORS(F)                                                  \
+  do {                                                                        \
+    KActionCollection* collec = m_view->actionCollection();                   \
+    F(                                                                        \
+      collec->action("delete_line"), SIGNAL(triggered(bool)),                 \
+      this, SLOT(deleteLinesWithCursor()));                                   \
+    F(                                                                        \
+      collec->action("delete_word_left"), SIGNAL(triggered(bool)),            \
+      this, SLOT(deleteWordLeft()));                                          \
+    F(                                                                        \
+      collec->action("delete_word_right"), SIGNAL(triggered(bool)),           \
+      this, SLOT(deleteWordRight()));                                         \
+    F(                                                                        \
+      collec->action("delete_next_character"), SIGNAL(triggered(bool)),       \
+      this, SLOT(deleteNextCharacter()));                                     \
+    F(                                                                        \
+      collec->action("backspace"), SIGNAL(triggered(bool)),                   \
+      this, SLOT(backspace()));                                               \
+    SIGNALMAN_DOC(F,textInserted(KTextEditor::Document*,KTextEditor::Range)); \
+    if (SIGNALMAN_CHECK(F)) {                                                 \
+      SIGNALMAN_DOC(F, exclusiveEditStart(KTextEditor::Document*));           \
+      SIGNALMAN_DOC(F, exclusiveEditEnd(KTextEditor::Document*));             \
+    }                                                                         \
+    actionCollection()->action("from_cursor_multiselection")                  \
+      ->setEnabled(SIGNALMAN_F_TO_BOOL_##F);                                  \
   } while (0)
 
 void MultiCursorView::connectCursors()
@@ -600,37 +697,37 @@ void MultiCursorView::disconnectCursors()
 #undef SIGNALMAN_F_TO_BOOL_connect
 #undef SIGNALMAN_F_TO_BOOL_disconnect
 
-#define SIGNALMAN_CURSORS_SYNCHRONIZE(F)                              \
-  KActionCollection* collec = m_view->actionCollection();             \
-  do {                                                                \
-    F(                                                                \
-      collec->action("move_line_up"), SIGNAL(triggered(bool)),        \
-      this, SLOT(moveCursorToUp()));                                  \
-    F(                                                                \
-      collec->action("move_line_down"), SIGNAL(triggered(bool)),      \
-      this, SLOT(moveCursorToDown()));                                \
-    F(                                                                \
-      /* "cusor" is ok */                                             \
-      collec->action("move_cusor_left"), SIGNAL(triggered(bool)),     \
-      this, SLOT(moveCursorToLeft()));                                \
-    F(                                                                \
-      collec->action("move_cursor_right"), SIGNAL(triggered(bool)),   \
-      this, SLOT(moveCursorToRight()));                               \
-    F(                                                                \
-      collec->action("beginning_of_line"), SIGNAL(triggered(bool)),   \
-      this, SLOT(moveCursorToBeginningOfLine()));                     \
-    F(                                                                \
-      collec->action("end_of_line"), SIGNAL(triggered(bool)),         \
-      this, SLOT(moveCursorToEndOfLine()));                           \
-    F(                                                                \
-      collec->action("to_matching_bracket"), SIGNAL(triggered(bool)), \
-      this, SLOT(moveCursorToMatchingBracket()));                     \
-    F(                                                                \
-      collec->action("word_left"), SIGNAL(triggered(bool)),           \
-      this, SLOT(moveCursorToWordLeft()));                            \
-    F(                                                                \
-      collec->action("word_right"), SIGNAL(triggered(bool)),          \
-      this, SLOT(moveCursorToWordRight()));                           \
+#define SIGNALMAN_CURSORS_SYNCHRONIZE(F)                                \
+  KActionCollection* collec = m_view->actionCollection();               \
+  do {                                                                  \
+    F(                                                                  \
+      collec->action("move_line_up"), SIGNAL(triggered(bool)),          \
+      this, SLOT(moveCursorToUp()));                                    \
+    F(                                                                  \
+      collec->action("move_line_down"), SIGNAL(triggered(bool)),        \
+      this, SLOT(moveCursorToDown()));                                  \
+    F(                                                                  \
+      /* "cusor" is ok */                                               \
+      collec->action("move_cusor_left"), SIGNAL(triggered(bool)),       \
+      this, SLOT(moveCursorToLeft()));                                  \
+    F(                                                                  \
+      collec->action("move_cursor_right"), SIGNAL(triggered(bool)),     \
+      this, SLOT(moveCursorToRight()));                                 \
+    F(                                                                  \
+      collec->action("beginning_of_line"), SIGNAL(triggered(bool)),     \
+      this, SLOT(moveCursorToBeginningOfLine()));                       \
+    F(                                                                  \
+      collec->action("end_of_line"), SIGNAL(triggered(bool)),           \
+      this, SLOT(moveCursorToEndOfLine()));                             \
+    F(                                                                  \
+      collec->action("to_matching_bracket"), SIGNAL(triggered(bool)),   \
+      this, SLOT(moveCursorToMatchingBracket()));                       \
+    F(                                                                  \
+      collec->action("word_left"), SIGNAL(triggered(bool)),             \
+      this, SLOT(moveCursorToWordLeft()));                              \
+    F(                                                                  \
+      collec->action("word_right"), SIGNAL(triggered(bool)),            \
+      this, SLOT(moveCursorToWordRight()));                             \
   } while(0)
 
 void MultiCursorView::connectSynchronizedCursors()
@@ -810,7 +907,7 @@ void MultiCursorView::setEnabledCursors(bool x)
   collec->action("backspace_multicursor")->setEnabled(x);
   collec->action("delete_multicursor")->setEnabled(x);
   collec->action("remove_all_multicursor")->setEnabled(x);
-  collec->action("remove_line_multicursor")->setEnabled(x);
+  collec->action("remove_cursor_line_multicursor")->setEnabled(x);
   collec->action("next_multicursor")->setEnabled(x);
   collec->action("previous_multicursor")->setEnabled(x);
   collec->action("synchronise_multicursor")->setEnabled(x);
@@ -1235,39 +1332,18 @@ void MultiCursorView::textInserted(KTextEditor::Document *doc, const KTextEditor
     auto it = lowerBound(m_cursors, m_view->cursorPosition());
     for (auto first = m_cursors.begin(); first != it; ++first) {
       m_document->insertText(first->cursor(), text);
-      first->revalid();
     }
     auto last = m_cursors.end();
     if (it != last) {
       if (m_view->cursorPosition() != it->cursor()) {
         m_document->insertText(it->cursor(), text);
-        it->revalid();
       }
       while (++it != last) {
         m_document->insertText(it->cursor(), text);
-        it->revalid();
       }
     }
 		endEditing();
 	}
-}
-
-void MultiCursorView::textRemoved(
-  KTextEditor::Document* doc, const KTextEditor::Range& range,
-  const QString& text)
-{
-  Q_UNUSED(doc);
-  Q_UNUSED(range);
-  // TODO block selection
-  if (startEditing()) {
-    CursorListDetail::removeBackwardText(
-      m_document, m_cursors, text.length(),
-      [this](Cursor const & c) {
-        return c.cursor() != m_view->cursorPosition();
-      }
-    );
-    endEditing();
-  }
 }
 
 void MultiCursorView::removeAllCursors()

@@ -96,6 +96,9 @@ private:
     bool isSame(KTextEditor::MovingRange * other) const
     { return m_range.get() == other; }
 
+    void setFeedback(KTextEditor::MovingRangeFeedback* feedback)
+    { m_range->setFeedback(feedback); }
+
   private:
     std::unique_ptr<KTextEditor::MovingRange> m_range;
   };
@@ -141,9 +144,12 @@ private slots:
   void exclusiveEditEnd(KTextEditor::Document*);
 
   void textInserted(KTextEditor::Document*, const KTextEditor::Range&);
-  void textRemoved(KTextEditor::Document*, const KTextEditor::Range&, const QString&);
-  void textBackspace();
-  void textDelete();
+
+  void deleteLinesWithCursor();
+  void deleteWordRight();
+  void deleteWordLeft();
+  void backspace();
+  void deleteNextCharacter();
 
   void setCursor();
   void removeCursorsOnLine();
