@@ -1046,7 +1046,7 @@ void MultiCursorView::moveCursorToMatchingBracket()
 
 void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
 {
-  auto it = lowerBound(m_cursors, m_view->cursorPosition());
+  auto it = lowerBound(m_cursors, cursor);
   if (it != m_cursors.end() && *it == cursor) {
     m_cursors.erase(it);
     checkCursors();
