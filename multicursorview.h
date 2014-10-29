@@ -90,9 +90,6 @@ private:
     friend bool operator<(const KTextEditor::Cursor& c1, const Cursor & c2)
     { return c1 < c2.cursor(); }
 
-    void revalid()
-    { setCursor(line(), column()); }
-
     bool isSame(KTextEditor::MovingRange * other) const
     { return m_range.get() == other; }
 
