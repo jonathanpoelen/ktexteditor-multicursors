@@ -218,114 +218,6 @@ struct MultiCursorView::CursorListDetail
     }
   }
 
-  static KTextEditor::Cursor
-  recoil(
-    KTextEditor::Document* doc,
-    const KTextEditor::Cursor& cursor,
-    int length, int minline = 0
-  ) {
-    if (cursor.column() >= length) {
-      return KTextEditor::Cursor(cursor.line(), cursor.column() - length);
-    }
-    KTextEditor::Cursor ret(cursor.line() - 1, 0);
-    length -= cursor.column();
-    while (length && ret.line() >= minline) {
-      const int line_length = doc->lineLength(ret.line());
-      if (line_length < length) {
-        ret.setLine(ret.line() - 1);
-        length -= line_length - 1;
-      }
-      else {
-        ret.setColumn(line_length - length + 1);
-        length = 0;
-      }
-    }
-    return ret;
-  }
-
-  static KTextEditor::Cursor
-  advance(
-    KTextEditor::Document* doc,
-    const KTextEditor::Cursor& cursor,
-    int length, int endline
-  ) {
-    KTextEditor::Cursor ret(cursor);
-    int line_length = doc->lineLength(cursor.line());
-    if (ret.column() + length - 1 < line_length)
-    ret.setColumn(ret.column() + length);
-    else
-    {
-      length -= line_length - ret.column() + 1;
-      ret.setColumn(0);
-      ret.setLine(ret.line() + 1);
-      while (length && ret.line() < endline)
-      {
-        line_length = doc->lineLength(ret.line());
-        if (line_length < length)
-        {
-          ret.setLine(ret.line() + 1);
-          length -= line_length - 1;
-        }
-        else
-        {
-          ret.setColumn(length);
-          length = 0;
-        }
-      }
-    }
-    return ret;
-  }
-
-  static void removeForwardText(
-    KTextEditor::Document* doc, CursorList & cursors, int length)
-  {
-    CursorList::reverse_iterator last = cursors.rend();
-    CursorList::reverse_iterator it = cursors.rbegin();
-    KTextEditor::Cursor cursor
-      = advance(doc, it->cursor(), length, doc->lines()+1);
-    doc->removeText(KTextEditor::Range(it->cursor(), cursor));
-    CursorList::reverse_iterator prev = it;
-    while (++it != last) {
-      cursor = advance(doc, it->cursor(), length, prev->cursor().line()+1);
-      if (prev->cursor() <= cursor) {
-        doc->removeText(KTextEditor::Range(it->cursor(), prev->cursor()));
-        prev = CursorList::reverse_iterator(cursors.erase(it.base()));
-        it = prev;
-      } else {
-        doc->removeText(KTextEditor::Range(it->cursor(), cursor));
-        ++prev;
-      }
-    }
-  }
-
-  template<class Pred>
-  static void removeBackwardText(
-    KTextEditor::Document* doc, CursorList & cursors, int length, Pred pred)
-  {
-    CursorList::iterator first = cursors.begin();
-    CursorList::iterator last = cursors.end();
-    if (pred(*first)) {
-      doc->removeText(KTextEditor::Range(
-        first->cursor(), recoil(doc, first->cursor(), length)
-      ));
-    }
-    KTextEditor::Cursor cursor_prev = first->cursor();
-    while (++first != last) {
-      KTextEditor::Cursor cursor
-        = recoil(doc, first->cursor(), length, cursor_prev.line());
-      if (cursor_prev >= cursor) {
-        if (pred(*first)) {
-          doc->removeText(KTextEditor::Range(first->cursor(), cursor_prev));
-        }
-        first = cursors.erase(--first);
-        last = cursors.end();
-        cursor_prev = cursor;
-      } else if (pred(*first)) {
-        doc->removeText(KTextEditor::Range(first->cursor(), cursor));
-      }
-    }
-  }
-
   struct RangeStart {
     const KTextEditor::MovingCursor&
     operator()(MultiCursorView::Range const & r) const
@@ -567,8 +459,11 @@ void MultiCursorView::deleteWordLeft()
 {
   std::size_t i = m_cursors.size();
   for (; i != 0; --i) {
-    const std::size_t sz = m_cursors.size();
     Cursor & c = m_cursors[i-1];
+    if (c == m_view->cursorPosition()) {
+      continue;
+    }
+    const std::size_t sz = m_cursors.size();
     m_document->removeText(KTextEditor::Range(
       CursorListDetail::wordPrev(m_document, c.line(), c.column())
     , c.cursor()
@@ -625,19 +520,55 @@ void MultiCursorView::deleteWordRight()
 
 void MultiCursorView::backspace()
 {
-  if (startEditing()) {
-    CursorListDetail::removeBackwardText(
-      m_document, m_cursors, 1,
-      [](Cursor const &) { return true; }
-    );
-    endEditing();
+  for (std::size_t i = m_cursors.front().cursor().atStartOfDocument()
+  ? 1 : 0; i != m_cursors.size(); ++i) {
+    Cursor & c = m_cursors[i];
+    if (c == m_view->cursorPosition()) {
+      continue;
+    }
+    const std::size_t sz = m_cursors.size();
+    const int line = c.line();
+    const int column = c.column();
+    int column2 = column;
+    int line2 = line;
+    if (!column) {
+      column2 = m_document->lineLength(--line2);
+    }
+    else {
+      --column2;
+    }
+    m_document->removeText(KTextEditor::Range(line, column, line2, column2));
+    i -= sz - m_cursors.size();
   }
 }
 
 void MultiCursorView::deleteNextCharacter()
 {
   if (startEditing()) {
-    CursorListDetail::removeForwardText(m_document, m_cursors, 1);
+    std::size_t i = m_cursors.size()
+      - (m_cursors.front().cursor().atEndOfDocument() ? 1 : 0);
+    while (i) {
+      Cursor & c = m_cursors[--i];
+      if (c == m_view->cursorPosition()) {
+        continue;
+      }
+      const int line = c.line();
+      const int column = c.column();
+      int column2 = column;
+      int line2 = line;
+      if (column == m_document->lineLength(line)) {
+        column2 = 0;
+        ++line2;
+      }
+      else {
+        ++column2;
+      }
+      m_document->removeText(KTextEditor::Range(line, column, line2, column2));
+    }
+    uniqueCont(m_cursors);
+    for (Cursor & c : m_cursors) {
+      c.setCursor(c.cursor());
+    }
     endEditing();
   }
 }
