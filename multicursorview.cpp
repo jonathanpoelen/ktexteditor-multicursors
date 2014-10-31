@@ -678,6 +678,9 @@ void MultiCursorView::setSynchronizedCursors()
   if (m_is_synchronized_cursor) {
     m_is_synchronized_cursor = false;
     disconnectSynchronizedCursors();
+    for (Cursor & c : m_cursors) {
+      c.resetkeepedColumn();
+    }
   } else {
     m_is_synchronized_cursor = true;
     connectSynchronizedCursors();
@@ -855,12 +858,21 @@ void MultiCursorView::moveCursorToUp()
 {
   auto first = std::find_if(m_cursors.begin(), m_cursors.end()
   , [](Cursor const & c) { return c.line() > 0; });
-  CursorListDetail::moveCursor(*this, first
-  , [](Cursor const & cur) {
-    const int l = cur.line();
-    const int c = cur.column();
-    return KTextEditor::Cursor(l-1, c);
-  });
+  auto cpfirst = m_cursors.begin();
+  auto end = m_cursors.end();
+  for (; first != end; ++first, ++cpfirst) {
+    const int line = first->line() - 1;
+    const int column = first->column();
+    if (column < first->getKeepedColumn()) {
+      const int line_len = m_document->lineLength(line);
+      cpfirst->setCursor(line, std::min(line_len, first->getKeepedColumn()));
+    }
+    else {
+      cpfirst->setCursorAndKeepColumn(line, column);
+    }
+  }
+  m_cursors.erase(std::unique(m_cursors.begin(), cpfirst), end);
+  checkCursors();
 }
 
 void MultiCursorView::moveCursorToDown()
@@ -872,7 +884,15 @@ void MultiCursorView::moveCursorToDown()
     if (lmax < first->line()) {
       break;
     }
-    first->setCursor(first->line() + 1, first->column());
+    const int column = first->column();
+    const int line = first->line() + 1;
+    if (column < first->getKeepedColumn()) {
+      const int line_len = m_document->lineLength(line);
+      first->setCursor(line, std::min(line_len, first->getKeepedColumn()));
+    }
+    else {
+      first->setCursorAndKeepColumn(line, column);
+    }
   }
   m_cursors.erase(std::unique(m_cursors.begin(), first), end);
   checkCursors();
@@ -956,6 +976,7 @@ void MultiCursorView::moveCursorToWordRight()
   uniqueCont(m_cursors);
 }
 
+// TODO
 void MultiCursorView::moveCursorToMatchingBracket()
 {
   if (m_is_moved) {
@@ -1104,6 +1125,7 @@ void MultiCursorView::selectWordLeft()
 //// TODO
 //}
 
+// TODO
 void MultiCursorView::selectMatchingBracket()
 {
   if (m_is_moved) {

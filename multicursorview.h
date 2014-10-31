@@ -58,6 +58,7 @@ private:
   {
     Cursor(KTextEditor::MovingRange * range) noexcept
     : m_range(range)
+    , m_keep_column(-1)
     {}
 
     const KTextEditor::MovingCursor& cursor() const
@@ -70,10 +71,25 @@ private:
     { return cursor().column(); }
 
     void setCursor(const KTextEditor::Cursor& cursor)
-    { m_range->setRange(KTextEditor::Range(cursor, cursor.line(), cursor.column()+1)); }
+    { setCursor(cursor.line(), cursor.column()); }
 
     void setCursor(int line, int column)
-    { m_range->setRange(KTextEditor::Range(line, column, line, column+1)); }
+    {
+      m_range->setRange(KTextEditor::Range(line, column, line, column+1));
+      m_keep_column = -1;
+    }
+
+    void setCursorAndKeepColumn(int line, int column)
+    {
+      setCursor(line, column);
+      m_keep_column = column;
+    }
+
+    void resetkeepedColumn()
+    { m_keep_column = -1; }
+
+    int getKeepedColumn() const
+    { return m_keep_column; }
 
     bool operator==(const KTextEditor::Cursor& cursor) const
     { return this->cursor() == cursor; }
@@ -98,6 +114,7 @@ private:
 
   private:
     std::unique_ptr<KTextEditor::MovingRange> m_range;
+    int m_keep_column;
   };
 
   struct Range
