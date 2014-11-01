@@ -24,13 +24,14 @@
 #include <KTextEditor/View>
 #include <KTextEditor/Document>
 #include <KTextEditor/MovingInterface>
+#include <KTextEditor/HighlightInterface>
 
 #include <KAction>
 #include <KActionCollection>
 
 #include <QApplication>
 #include <QClipboard>
-#include <KConfigGroup>
+
 
 namespace {
 template<class Cont, class T>
@@ -117,6 +118,139 @@ struct MultiCursorView::CursorListDetail
     , CursorListDetail::RangeEnd()
     , CursorListDetail::RangeStart()
     , f);
+  }
+
+private:
+
+  static bool isBracket(QChar c) {
+    return c == '{'
+        || c == '}'
+        || c == '('
+        || c == ')'
+        || c == '['
+        || c == ']'
+    ;
+  }
+
+  template<class Mover>
+  static bool matchingBracketImpl(
+    KTextEditor::Document * doc
+  , KTextEditor::HighlightInterface * highlight
+  , KTextEditor::Cursor & cursor
+  , QChar bracket
+  , QChar opposite
+  , Mover move)
+  {
+    const QString mode = highlight->highlightingModeAt(cursor);
+
+    uint nesting = 0;
+    while (move(cursor)) {
+      if (highlight->highlightingModeAt(cursor) == mode) {
+        const QChar c = doc->character(cursor);
+        if (c == opposite) {
+          if (nesting == 0) {
+            return true;
+          }
+          nesting--;
+        } else if (c == bracket) {
+          nesting++;
+        }
+      }
+    }
+    return false;
+  }
+
+public:
+  struct FakeHighlight : KTextEditor::HighlightInterface{
+    KTextEditor::Attribute::Ptr defaultStyle(DefaultStyle) const
+    { return {}; }
+    QStringList embeddedHighlightingModes() const
+    { return {}; }
+    QString highlightingModeAt(const KTextEditor::Cursor&)
+    { return ""; }
+    QList< AttributeBlock > lineAttributes(const unsigned int)
+    { return {}; }
+  };
+
+  static FakeHighlight & fake_highlight()
+  {
+    static FakeHighlight h;
+    return h;
+  }
+
+  static bool matchingBracket(
+    KTextEditor::Document * doc
+  , KTextEditor::HighlightInterface * highlight
+  , KTextEditor::Cursor & cursor
+  , int maxLines = 5000)
+  {
+    int columns = doc->lineLength(cursor.line());
+    if (!columns) {
+      return false;
+    }
+
+    QChar bracket;
+
+    const QChar right = doc->character(cursor);
+    const QChar left  = doc->character(
+      KTextEditor::Cursor(cursor.line(), cursor.column() - 1));
+
+    if (isBracket(left)) {
+      bracket = left;
+      cursor.setColumn(cursor.column() - 1);
+    } else if (isBracket(right)) {
+      bracket = right;
+    } else {
+      return false;
+    }
+
+    if (bracket == '{' || bracket == '(' || bracket == '[') {
+      const QChar opposite
+        = (bracket == '{' ? '}' : (bracket == '(' ? ')' : ']'));
+      const int maxLine = qMin(cursor.line() + maxLines, doc->lines());
+      const bool res = matchingBracketImpl(
+        doc, highlight, cursor, bracket, opposite
+      , [doc, maxLine, &columns](KTextEditor::Cursor & cursor) {
+        const int column = cursor.column() + 1;
+        if (column == columns) {
+          columns = doc->lineLength(cursor.line());
+          const int line = cursor.line() + 1;
+          if (line > maxLine) {
+            return false;
+          }
+          cursor.setPosition(line, 0);
+        }
+        else {
+          cursor.setColumn(column);
+        }
+        return true;
+      });
+      if (res) {
+        cursor.setColumn(cursor.column() + 1);
+      }
+      return res;
+    }
+    else {
+      const QChar opposite
+        = (bracket == '}' ? '{' : (bracket == ')' ? '(' : '['));
+      const int minLine = qMax(cursor.line() - maxLines, 0);
+      return matchingBracketImpl(
+        doc, highlight, cursor, bracket, opposite
+      , [doc, minLine](KTextEditor::Cursor & cursor) {
+        const int column = cursor.column() - 1;
+        if (column == -1) {
+          const int line = cursor.line() - 1;
+          if (line < minLine) {
+            return false;
+          }
+          cursor.setPosition(line, doc->lineLength(line));
+        }
+        else {
+          cursor.setColumn(column);
+        }
+        return true;
+      });
+    }
   }
 
   static KTextEditor::Cursor wordPrev(
@@ -865,7 +999,7 @@ void MultiCursorView::moveCursorToUp()
     const int column = first->column();
     if (column < first->getKeepedColumn()) {
       const int line_len = m_document->lineLength(line);
-      cpfirst->setCursor(line, std::min(line_len, first->getKeepedColumn()));
+      cpfirst->setCursor(line, qMin(line_len, first->getKeepedColumn()));
     }
     else {
       cpfirst->setCursorAndKeepColumn(line, column);
@@ -888,7 +1022,7 @@ void MultiCursorView::moveCursorToDown()
     const int line = first->line() + 1;
     if (column < first->getKeepedColumn()) {
       const int line_len = m_document->lineLength(line);
-      first->setCursor(line, std::min(line_len, first->getKeepedColumn()));
+      first->setCursor(line, qMin(line_len, first->getKeepedColumn()));
     }
     else {
       first->setCursorAndKeepColumn(line, column);
@@ -976,24 +1110,20 @@ void MultiCursorView::moveCursorToWordRight()
   uniqueCont(m_cursors);
 }
 
-// TODO
 void MultiCursorView::moveCursorToMatchingBracket()
 {
-  if (m_is_moved) {
-    return ;
+  KTextEditor::HighlightInterface *iface
+    = qobject_cast<KTextEditor::HighlightInterface*>(m_document);
+  if (!iface) {
+    iface = &CursorListDetail::fake_highlight();
   }
-  m_is_moved = true;
-  QAction * action = m_view->actionCollection()->action("to_matching_bracket");
-  KTextEditor::Cursor cursor = m_view->cursorPosition();
   for (Cursor & c : m_cursors) {
-    m_view->setCursorPosition(c.cursor());
-    action->trigger();
-    c.setCursor(m_view->cursorPosition());
+    KTextEditor::Cursor cursor = c.cursor();
+    if (CursorListDetail::matchingBracket(m_document, iface, cursor)) {
+      c.setCursor(cursor);
+    }
   }
-  m_view->setCursorPosition(cursor);
-  std::sort(m_cursors.begin(), m_cursors.end());
   uniqueCont(m_cursors);
-  m_is_moved = false;
 }
 
 void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
@@ -1031,7 +1161,7 @@ void MultiCursorView::selectLineUp()
 {
   CursorListDetail::selectAlgoLeft(*this
   , [this](int line, int column) {
-    return KTextEditor::Cursor(std::max(line - 1, 0), column);
+    return KTextEditor::Cursor(qMax(line - 1, 0), column);
   });
 }
 
@@ -1125,24 +1255,21 @@ void MultiCursorView::selectWordLeft()
 //// TODO
 //}
 
-// TODO
 void MultiCursorView::selectMatchingBracket()
 {
-  if (m_is_moved) {
-    return ;
+  KTextEditor::HighlightInterface *iface
+    = qobject_cast<KTextEditor::HighlightInterface*>(m_document);
+  if (!iface) {
+    iface = &CursorListDetail::fake_highlight();
   }
-  m_is_moved = true;
-  QAction * action = m_view->actionCollection()->action("to_matching_bracket");
-  KTextEditor::Cursor cursor = m_view->cursorPosition();
-  KTextEditor::Range selection = m_view->selectionRange();
   CursorListDetail::selectAlgoLeft(*this
-  , [action, this](int line, int column) {
-    m_view->setCursorPosition(KTextEditor::Cursor(line, column));
-    action->trigger();
-    return m_view->cursorPosition();
+  , [iface, this](int line, int column) {
+    KTextEditor::Cursor cursor(line, column);
+    if (CursorListDetail::matchingBracket(m_document, iface, cursor)) {
+      return cursor;
+    }
+    return KTextEditor::Cursor(line, column);
   });
-  m_view->setCursorPosition(cursor);
-  m_is_moved = false;
 }
 
 void MultiCursorView::setRange(
@@ -1181,8 +1308,8 @@ void MultiCursorView::setRange(
     }
     else {
       it_start->setRange(
-        std::min(it_start->start().toCursor(), range.start()),
-        std::max((it_end-1)->end().toCursor(), range.end())
+        qMin(it_start->start().toCursor(), range.start()),
+        qMax((it_end-1)->end().toCursor(), range.end())
       );
       m_ranges.erase(++it_start, it_end);
     }
@@ -1217,7 +1344,7 @@ void MultiCursorView::setCursor()
 	if (m_view->selection()) {
 		const KTextEditor::Range& range = m_view->selectionRange();
 		for (int line = range.start().line(); line != range.end().line() + 1; ++line) {
-			setCursor(KTextEditor::Cursor(line, std::min(range.start().column(), m_document->lineLength(line))));
+			setCursor(KTextEditor::Cursor(line, qMin(range.start().column(), m_document->lineLength(line))));
 		}
 	} else {
 		setCursor(m_view->cursorPosition());
