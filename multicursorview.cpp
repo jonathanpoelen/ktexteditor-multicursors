@@ -31,7 +31,9 @@
 
 #include <QApplication>
 #include <QClipboard>
-
+#include <QPainter>
+#include <QLayout>
+#include <QPaintEvent>
 
 namespace {
 template<class Cont, class T>
@@ -405,6 +407,57 @@ public:
       }
     );
   }
+
+  class CursorArea : public QWidget
+  {
+  public:
+    CursorArea(
+      KTextEditor::View * view
+    , const KTextEditor::MovingCursor & cursor)
+    : QWidget(view)
+    , m_view(view)
+    , m_cursor(cursor)
+    {
+      //const QPoint point = m_view->cursorToCoordinate(m_cursor);
+      //setGeometry(0, 0, 1, 10);
+    }
+
+    virtual QSize sizeHint() const {
+      //QPoint point = m_view->cursorToCoordinate(m_cursor);
+      return QSize(2, m_view->fontInfo().pixelSize());
+    }
+
+    virtual QSize minimumSizeHint() const {
+      return QSize(2, m_view->fontInfo().pixelSize());
+    }
+
+  protected:
+    void paintEvent(QPaintEvent *event)
+    {
+      qDebug() << "paint  " << event->rect();
+      KTextEditor::Cursor cursor = m_cursor.toCursor();
+      const QPoint point = m_view->cursorToCoordinate(cursor);
+      cursor.setLine(cursor.line() + 1);
+      const QPoint point2 = m_view->cursorToCoordinate(cursor);
+      const QRect rect(
+        point.x()/* - x() - m_view->focusWidget()->x()*/
+      , point.y()/* - y() - m_view->focusWidget()->y()*/
+      , 1, 15);
+      if (event->rect().contains(rect)) {
+        QPainter painter(this);
+        qDebug()
+          << m_cursor << " -> " << point << " -> " << point2
+          << " [" << x() << ',' << y() << "] "
+          << m_view->focusWidget()->x() << ',' << m_view->focusWidget()->y();
+        move(3 - m_view->focusWidget()->x(), 3 - m_view->focusWidget()->y());
+        painter.drawRect(rect);
+      }
+    }
+
+  private:
+    KTextEditor::View * m_view;
+    const KTextEditor::MovingCursor & m_cursor;
+  };
 };
 
 
@@ -1126,6 +1179,12 @@ void MultiCursorView::moveCursorToMatchingBracket()
   uniqueCont(m_cursors);
 }
 
+
+MultiCursorView::Cursor::~Cursor()
+{
+  //m_w->deleteLater();
+}
+
 void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
 {
   auto it = lowerBound(m_cursors, cursor);
@@ -1135,12 +1194,15 @@ void MultiCursorView::setCursor(const KTextEditor::Cursor& cursor)
   }
   else {
     auto moving_cursor = newMovingCursor(cursor);
+    CursorListDetail::CursorArea * area
+      = new CursorListDetail::CursorArea(m_view, moving_cursor->start());
+    m_view->focusWidget()->layout()->addWidget(area);
     if (m_cursors.empty()) {
-      m_cursors.emplace_back(moving_cursor);
+      m_cursors.emplace_back(moving_cursor, area);
       startCursors();
     }
     else {
-      m_cursors.emplace(it, moving_cursor);
+      m_cursors.emplace(it, moving_cursor, area);
     }
   }
 }

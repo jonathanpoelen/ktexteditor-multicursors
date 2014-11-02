@@ -27,6 +27,7 @@
 #include <KTextEditor/Attribute>
 #include <KTextEditor/MovingRange>
 #include <ktexteditor/movingrangefeedback.h>
+#include <QWidget>
 
 namespace KTextEditor
 {
@@ -37,7 +38,6 @@ namespace KTextEditor
 }
 
 class MultiCursorView;
-
 
 class MultiCursorView
 : public QObject
@@ -56,10 +56,16 @@ public:
 private:
   struct Cursor
   {
-    Cursor(KTextEditor::MovingRange * range) noexcept
+    Cursor(KTextEditor::MovingRange * range, QWidget * w) noexcept
     : m_range(range)
+    , m_w(w)
     , m_keep_column(-1)
     {}
+
+    Cursor(Cursor &&) = default;
+    Cursor& operator = (Cursor &&) = default;
+
+    ~Cursor();
 
     const KTextEditor::MovingCursor& cursor() const
     { return m_range->start(); }
@@ -114,6 +120,7 @@ private:
 
   private:
     std::unique_ptr<KTextEditor::MovingRange> m_range;
+    QWidget * m_w;
     int m_keep_column;
   };
 
