@@ -29,9 +29,9 @@
 #include <KAction>
 #include <KActionCollection>
 
-#include <QApplication>
+#include <QtGui/QApplication>
 #include <QClipboard>
-
+#include <QKeyEvent>
 
 namespace {
 template<class Cont, class T>
@@ -448,6 +448,7 @@ MultiCursorView::MultiCursorView(
 , m_remove_cursor_if_only_click(false)
 , m_has_cursor_ctrl(false)
 , m_has_selection_ctrl(false)
+, m_remove_all_if_esc(false)
 , m_is_moved(false)
 , m_invalided_cursor(*this)
 , m_invalided_range(*this)
@@ -1365,9 +1366,17 @@ void MultiCursorView::setActiveSelectionCtrlClick(bool active)
   m_has_selection_ctrl = active;
 }
 
+void MultiCursorView::setActiveRemoveAllIfEsc(bool active)
+{
+  setEventFilter(active);
+  m_remove_all_if_esc = active;
+}
+
 void MultiCursorView::setEventFilter(bool x)
 {
-  if ((m_has_selection_ctrl || m_has_cursor_ctrl) == x) {
+  if (x == (
+    m_has_selection_ctrl || m_has_cursor_ctrl || m_remove_all_if_esc
+  )) {
     return;
   }
 
@@ -1381,7 +1390,17 @@ void MultiCursorView::setEventFilter(bool x)
 
 bool MultiCursorView::eventFilter(QObject* obj, QEvent* event)
 {
-  if (event->type() == QEvent::MouseButtonRelease) {
+  if (event->type() == QEvent::KeyRelease) {
+    if (m_remove_all_if_esc
+     && not QApplication::keyboardModifiers()
+     && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape
+     && not m_view->selection()) {
+      removeAllCursors();
+      removeAllRanges();
+      return false;
+    }
+  }
+  else if (event->type() == QEvent::MouseButtonRelease) {
     if (QApplication::keyboardModifiers() & Qt::ControlModifier) {
       if (m_view->selection()) {
         if (m_has_selection_ctrl) {

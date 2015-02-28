@@ -264,6 +264,7 @@ private:
 public:
   void setActiveCursorCtrlClick(bool active, bool remove_cursor_if_only_click);
   void setActiveSelectionCtrlClick(bool active);
+  void setActiveRemoveAllIfEsc(bool active);
 
 private:
   void setEventFilter(bool);
@@ -306,6 +307,7 @@ private:
   bool m_remove_cursor_if_only_click;
   bool m_has_cursor_ctrl;
   bool m_has_selection_ctrl;
+  bool m_remove_all_if_esc;
   bool m_is_moved;
   InvalidedCursor m_invalided_cursor;
   InvalidedRange m_invalided_range;

@@ -60,6 +60,8 @@ private:
       KColorButton * underline_color;
       QCheckBox * active_ctrl_click;
     } selection;
+
+    QCheckBox * active_remove_all_if_esc;
   } w;
 };
 

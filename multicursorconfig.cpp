@@ -92,6 +92,10 @@ MultiCursorConfig::MultiCursorConfig(QWidget *parent, const QVariantList &args)
     = new QCheckBox(i18n("Set selection with Ctrl+Click"), this);
   layout->addWidget(w.selection.active_ctrl_click);
 
+  w.active_remove_all_if_esc = new QCheckBox(
+    i18n("Remove all cursors and selections if Esc is pressed"), this);
+  glayout->addWidget(w.active_remove_all_if_esc);
+
   setLayout(glayout);
 
   //load();
@@ -124,6 +128,11 @@ MultiCursorConfig::MultiCursorConfig(QWidget *parent, const QVariantList &args)
   QObject::connect(
     w.selection.active_ctrl_click, SIGNAL(stateChanged(int)),
     this, SLOT(slotChanged()));
+
+  QObject::connect(
+    w.active_remove_all_if_esc, SIGNAL(stateChanged(int)),
+    this, SLOT(slotChanged()));
+
 
   QObject::connect(
     w.cursor.underline_style, SIGNAL(currentIndexChanged(int)),
@@ -159,6 +168,7 @@ void MultiCursorConfig::save()
   if (MultiCursorPlugin::self())
   {
     MultiCursorPlugin * self = MultiCursorPlugin::self();
+
     self->setCursorBrush(w.cursor.color->color());
     self->setCursorUnderlineStyle(QTextCharFormat::UnderlineStyle(
       w.cursor.underline_style->currentIndex()));
@@ -175,6 +185,8 @@ void MultiCursorConfig::save()
 
     self->setActiveSelectionCtrlClick(
       w.selection.active_ctrl_click->isChecked());
+
+    self->setActiveRemoveAllIfEsc(w.active_remove_all_if_esc->isChecked());
 
     self->writeConfig();
   }
@@ -199,6 +211,14 @@ void MultiCursorConfig::save()
     cg.writeEntry(
       "underline_color_selection",
       w.selection.underline_color->text());
+
+    cg.writeEntry(
+      "active_ctrl_click_selection",
+      w.selection.active_ctrl_click->isChecked());
+
+    cg.writeEntry(
+      "active_remove_all_if_esc",
+      w.active_remove_all_if_esc->isChecked());
   }
   emit changed(false);
 }
@@ -222,8 +242,9 @@ void MultiCursorConfig::load()
     w.selection.underline_style->setCurrentIndex(
       self->selectionUnderlineStyle());
 
-    w.selection.active_ctrl_click->setChecked(
-      self->activeSelectionCtrlClick());
+    w.selection.active_ctrl_click->setChecked(self->activeSelectionCtrlClick());
+
+    w.active_remove_all_if_esc->setChecked(self->activeRemoveAllIfEsc());
   }
   else
   {
@@ -257,6 +278,10 @@ void MultiCursorConfig::load()
     w.selection.active_ctrl_click->setChecked(
       cg.readEntry(
         "active_ctrl_click_selection", values.selection.active_ctrl_click));
+
+    w.active_remove_all_if_esc->setChecked(
+      cg.readEntry(
+        "active_remove_all_if_esc", values.m_active_remove_all_if_esc));
   }
 
   if (!w.cursor.active_ctrl_click->isChecked()) {
@@ -277,6 +302,7 @@ void MultiCursorConfig::load()
 void MultiCursorConfig::defaults()
 {
   const MultiCursorPlugin::DefaultValues values;
+
   w.cursor.color->setColor(values.cursor.color);
   w.cursor.underline_style->setCurrentIndex(values.cursor.underline_style);
   w.cursor.underline_color->setColor(values.cursor.underline_color);
@@ -292,6 +318,8 @@ void MultiCursorConfig::defaults()
 
   w.selection.active_ctrl_click->setChecked(
     values.selection.active_ctrl_click);
+
+  w.active_remove_all_if_esc->setChecked(values.m_active_remove_all_if_esc);
 
   emit changed(true);
 }

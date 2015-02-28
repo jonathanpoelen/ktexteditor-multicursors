@@ -51,6 +51,7 @@ public:
       QColor underline_color = Qt::red;
       bool active_ctrl_click = true;
     } selection;
+    bool m_active_remove_all_if_esc = false;
   };
 
 public:
@@ -89,6 +90,7 @@ public:
 
   void setActiveSelectionCtrlClick(bool active);
 
+  void setActiveRemoveAllIfEsc(bool active);
 
   QBrush cursorBrush() const
   { return m_cursor_attr->background(); }
@@ -109,6 +111,8 @@ public:
   { return m_selection_attr->underlineColor(); }
   bool activeSelectionCtrlClick() const
   { return m_active_selection_ctrl_click; }
+  bool activeRemoveAllIfEsc() const
+  { return m_active_remove_all_if_esc; }
 
 private:
   static MultiCursorPlugin *plugin;
@@ -118,6 +122,7 @@ private:
   bool m_active_cursor_ctrl_click;
   bool m_remove_cursor_if_only_click;
   bool m_active_selection_ctrl_click;
+  bool m_active_remove_all_if_esc;
 };
 
 K_PLUGIN_FACTORY_DECLARATION(MultiCursorPluginFactory)

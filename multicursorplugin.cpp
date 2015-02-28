@@ -39,6 +39,7 @@ MultiCursorPlugin::MultiCursorPlugin(QObject *parent, const QVariantList &)
 , m_active_cursor_ctrl_click(false)
 , m_remove_cursor_if_only_click(false)
 , m_active_selection_ctrl_click(false)
+, m_active_remove_all_if_esc(false)
 {
   plugin = this;
 
@@ -47,7 +48,7 @@ MultiCursorPlugin::MultiCursorPlugin(QObject *parent, const QVariantList &)
 
 MultiCursorPlugin::~MultiCursorPlugin()
 {
-  plugin = 0;
+  plugin = nullptr;
 }
 
 void MultiCursorPlugin::addView(KTextEditor::View *view)
@@ -59,6 +60,9 @@ void MultiCursorPlugin::addView(KTextEditor::View *view)
   }
   if (m_active_selection_ctrl_click) {
     nview->setActiveSelectionCtrlClick(true);
+  }
+  if (m_active_remove_all_if_esc) {
+    nview->setActiveRemoveAllIfEsc(true);
   }
   m_views.append(nview);
 }
@@ -79,7 +83,7 @@ void MultiCursorPlugin::readConfig()
   KConfigGroup cg(KGlobal::config(), "MultiCursor Plugin");
   const DefaultValues values;
   m_cursor_attr->setBackground(
-    cg.readEntry("cursor_brush", values.cursor.color));
+    cg.readEntry("cursor_color", values.cursor.color));
   m_cursor_attr->setUnderlineColor(
     cg.readEntry("underline_color", values.cursor.underline_color));
   m_cursor_attr->setUnderlineStyle(QTextCharFormat::UnderlineStyle(
@@ -97,12 +101,14 @@ void MultiCursorPlugin::readConfig()
     cg.readEntry(
       "underline_style_selection", int(values.selection.underline_style))));
   m_active_selection_ctrl_click = cg.readEntry("active_ctrl_click_selection", true);
+
+  m_active_remove_all_if_esc = cg.readEntry("active_remove_all_if_esc", false);
 }
 
 void MultiCursorPlugin::writeConfig()
 {
   KConfigGroup cg(KGlobal::config(), "MultiCursor Plugin");
-  cg.writeEntry("cursor_brush", m_cursor_attr->background().color());
+  cg.writeEntry("cursor_color", m_cursor_attr->background().color());
   cg.writeEntry("underline_color", m_cursor_attr->underlineColor());
   cg.writeEntry("underline_style", int(m_cursor_attr->underlineStyle()));
   cg.writeEntry("remove_cursor_if_only_click", m_remove_cursor_if_only_click);
@@ -114,6 +120,8 @@ void MultiCursorPlugin::writeConfig()
   cg.writeEntry(
     "underline_style_selection", int(m_selection_attr->underlineStyle()));
   cg.writeEntry("active_ctrl_click_selection", m_active_selection_ctrl_click);
+
+  cg.writeEntry("active_remove_all_if_esc", m_active_remove_all_if_esc);
 }
 
 void MultiCursorPlugin::setActiveCursorCtrlClick(
@@ -131,6 +139,14 @@ void MultiCursorPlugin::setActiveSelectionCtrlClick(bool active)
   m_active_selection_ctrl_click = active;
   for (MultiCursorView * v: m_views) {
     v->setActiveSelectionCtrlClick(active);
+  }
+}
+
+void MultiCursorPlugin::setActiveRemoveAllIfEsc(bool active)
+{
+  m_active_remove_all_if_esc = active;
+  for (MultiCursorView * v: m_views) {
+    v->setActiveRemoveAllIfEsc(active);
   }
 }
 
