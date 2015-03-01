@@ -267,7 +267,7 @@ public:
   void setActiveRemoveAllIfEsc(bool active);
 
 private:
-  void setEventFilter(bool);
+  void setEventFilter(bool &, bool);
 
   class InvalidedCursor : public KTextEditor::MovingRangeFeedback {
     MultiCursorView & m_cursorview;

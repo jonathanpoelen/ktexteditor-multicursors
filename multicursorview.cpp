@@ -1356,28 +1356,27 @@ void MultiCursorView::setActiveCursorCtrlClick(
   bool active, bool remove_cursor_if_only_click)
 {
   m_remove_cursor_if_only_click = remove_cursor_if_only_click;
-  setEventFilter(active);
-  m_has_cursor_ctrl = active;
+  setEventFilter(m_has_cursor_ctrl, active);
 }
 
 void MultiCursorView::setActiveSelectionCtrlClick(bool active)
 {
-  setEventFilter(active);
-  m_has_selection_ctrl = active;
+  setEventFilter(m_has_selection_ctrl, active);
 }
 
 void MultiCursorView::setActiveRemoveAllIfEsc(bool active)
 {
-  setEventFilter(active);
-  m_remove_all_if_esc = active;
+  setEventFilter(m_remove_all_if_esc, active);
 }
 
-void MultiCursorView::setEventFilter(bool x)
+void MultiCursorView::setEventFilter(bool & r, bool x)
 {
-  if (x == (
+  bool is_active = m_has_selection_ctrl || m_has_cursor_ctrl || m_remove_all_if_esc;
+  r = x;
+  if (is_active == (
     m_has_selection_ctrl || m_has_cursor_ctrl || m_remove_all_if_esc
   )) {
-    return;
+    return ;
   }
 
   if (x) {
